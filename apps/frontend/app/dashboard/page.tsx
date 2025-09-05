@@ -64,6 +64,10 @@ export default function DashboardPage() {
   const [statistics, setStatistics] = useState<DashboardStatistics | null>(null)
   const [latestLessons, setLatestLessons] = useState<LatestLesson[]>([])
   const [dataLoading, setDataLoading] = useState(true)
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [editingName, setEditingName] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [saveNameLoading, setSaveNameLoading] = useState(false)
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -150,6 +154,40 @@ export default function DashboardPage() {
     router.push('/')
   }
 
+  const handleSaveName = async () => {
+    if (!newName.trim() || saveNameLoading) return
+    
+    setSaveNameLoading(true)
+    try {
+      const response = await fetch('/api/auth/update-profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify({ name: newName.trim() })
+      })
+
+      if (response.ok) {
+        await getCurrentUser() // ユーザー情報を再取得
+        setEditingName(false)
+        setShowSettingsModal(false)
+        setNewName('')
+      } else {
+        console.error('Failed to update name')
+      }
+    } catch (error) {
+      console.error('Error updating name:', error)
+    } finally {
+      setSaveNameLoading(false)
+    }
+  }
+
+  const openSettingsModal = () => {
+    setNewName(user.name || '')
+    setShowSettingsModal(true)
+  }
+
   if (isLoading || !user) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black flex items-center justify-center">
@@ -201,6 +239,14 @@ export default function DashboardPage() {
                   </div>
                   <span className="text-white text-sm font-medium">{user.name}</span>
                 </div>
+                
+                <button
+                  onClick={openSettingsModal}
+                  className="p-2 text-gray-400 hover:text-white transition"
+                  title="設定"
+                >
+                  <Settings className="w-5 h-5" />
+                </button>
                 
                 <button
                   onClick={handleLogout}
@@ -504,6 +550,89 @@ export default function DashboardPage() {
           </div>
         </section>
       </main>
+
+      {/* Settings Modal */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-gray-900 rounded-xl p-6 w-full max-w-md mx-4 border border-gray-700">
+            <h3 className="text-xl font-bold text-white mb-4">設定</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  名前
+                </label>
+                {editingName ? (
+                  <div className="space-y-3">
+                    <input
+                      type="text"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-yellow-400"
+                      placeholder="新しい名前を入力"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSaveName}
+                        disabled={saveNameLoading || !newName.trim()}
+                        className="px-4 py-2 bg-yellow-500 text-black rounded-lg font-medium hover:bg-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {saveNameLoading ? '保存中...' : '保存'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingName(false)
+                          setNewName(user.name || '')
+                        }}
+                        className="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg font-medium hover:bg-gray-600"
+                      >
+                        キャンセル
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <span className="text-white">{user.name}</span>
+                    <button
+                      onClick={() => setEditingName(true)}
+                      className="text-yellow-400 hover:text-yellow-300 text-sm font-medium"
+                    >
+                      編集
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  メールアドレス
+                </label>
+                <span className="text-gray-400 text-sm">{user.email}</span>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  役割
+                </label>
+                <span className="text-gray-400 text-sm">{user.role}</span>
+              </div>
+            </div>
+
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => {
+                  setShowSettingsModal(false)
+                  setEditingName(false)
+                  setNewName('')
+                }}
+                className="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg font-medium hover:bg-gray-600"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

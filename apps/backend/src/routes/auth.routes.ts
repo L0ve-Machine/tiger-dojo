@@ -3,6 +3,7 @@ import { AuthService } from '../services/auth.service'
 import { validateRequest, registerSchema, loginSchema, refreshTokenSchema } from '../utils/validation.utils'
 import { authenticateToken, validateRefreshToken } from '../middleware/auth.middleware'
 import { InviteService } from '../services/invite.service'
+import { prisma } from '../index'
 import { z } from 'zod'
 
 const router = Router()
@@ -322,6 +323,50 @@ router.get('/verify-token', authenticateToken, async (req: Request, res: Respons
     res.status(401).json({
       valid: false,
       error: 'Invalid token'
+    })
+  }
+})
+
+// PUT /api/auth/update-profile - Update user profile
+router.put('/update-profile', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        error: 'Authentication required'
+      })
+    }
+
+    const { name } = req.body
+
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return res.status(400).json({
+        error: '名前は必須です'
+      })
+    }
+
+    // Update user name in database
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user.userId },
+      data: { name: name.trim() },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        createdAt: true,
+        lastLoginAt: true
+      }
+    })
+
+    res.json({
+      message: '名前を更新しました',
+      user: updatedUser
+    })
+
+  } catch (error: any) {
+    console.error('Update profile error:', error)
+    res.status(500).json({
+      error: 'プロフィールの更新に失敗しました'
     })
   }
 })
