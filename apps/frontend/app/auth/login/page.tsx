@@ -83,7 +83,7 @@ export default function LoginPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10 bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                    className="pl-10 bg-white border-gray-700 text-black placeholder:text-gray-500"
                     placeholder="student@fx-tiger-dojo.com"
                     required
                   />
@@ -100,7 +100,7 @@ export default function LoginPage() {
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 pr-10 bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                    className="pl-10 pr-10 bg-white border-gray-700 text-black placeholder:text-gray-500"
                     placeholder="password123!A"
                     required
                   />
