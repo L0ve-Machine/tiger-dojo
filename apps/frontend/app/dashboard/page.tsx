@@ -58,7 +58,7 @@ interface LatestLesson {
 
 export default function DashboardPage() {
   const router = useRouter()
-  const { user, isAuthenticated, isLoading, logout, getCurrentUser } = useAuthStore()
+  const { user, isAuthenticated, isLoading, logout, getCurrentUser, updateUser } = useAuthStore()
   
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false)
   const [statistics, setStatistics] = useState<DashboardStatistics | null>(null)
@@ -159,8 +159,10 @@ export default function DashboardPage() {
     
     setSaveNameLoading(true)
     try {
-      await authApi.updateProfile({ name: newName.trim() })
-      await getCurrentUser() // ユーザー情報を再取得
+      const response = await authApi.updateProfile({ name: newName.trim() })
+      if (response.data.user) {
+        updateUser(response.data.user)
+      }
       setEditingName(false)
       setShowSettingsModal(false)
       setNewName('')

@@ -219,12 +219,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     socket?.emit('join_room', { roomType, roomId })
   },
 
-  joinChannel: (channelId: string) => {
-    // For channel-based chat, use 'course' room type with channel ID
-    get().joinRoom('course', channelId)
-    set({ currentChannel: channelId })
-  },
-
   leaveRoom: () => {
     const { socket, currentRoom } = get()
     

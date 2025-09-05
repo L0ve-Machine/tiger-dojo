@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/auth'
 import { useSocketStore } from '@/lib/socket'
+import { authApi } from '@/lib/api'
 import { Send, Users, Hash, AtSign, Settings, Plus, Search, Mic, Menu, X, AlertTriangle, Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
@@ -31,7 +32,7 @@ interface LoadingStates {
 
 export default function ChatPage() {
   const router = useRouter()
-  const { user, isAuthenticated } = useAuthStore()
+  const { user, isAuthenticated, updateUser } = useAuthStore()
   const {
     socket,
     isConnected,
@@ -82,6 +83,7 @@ export default function ChatPage() {
   const [reconnectAttempts, setReconnectAttempts] = useState(0)
   const [lastPongTime, setLastPongTime] = useState(Date.now())
   const [playNotificationSound, setPlayNotificationSound] = useState(false)
+  const [newUserName, setNewUserName] = useState('')
   
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -373,6 +375,39 @@ export default function ChatPage() {
     setShowDeleteConfirm({ show: true, channelId, channelName })
   }
 
+  const handleSaveProfile = async () => {
+    const trimmedName = newUserName.trim()
+    
+    if (!trimmedName) {
+      setError({ message: '名前を入力してください', type: 'warning' })
+      return
+    }
+    
+    if (trimmedName === user?.name) {
+      setShowProfileModal(false)
+      return
+    }
+    
+    setLoadingStates(prev => ({ ...prev, sendingMessage: true }))
+    setError(null)
+    
+    try {
+      const response = await authApi.updateProfile({ name: trimmedName })
+      if (response.data.user) {
+        updateUser(response.data.user)
+        setShowProfileModal(false)
+        setError({ message: '名前を更新しました', type: 'info' })
+      }
+    } catch (err: any) {
+      setError({ 
+        message: err.response?.data?.error || '名前の更新に失敗しました', 
+        type: 'error' 
+      })
+    } finally {
+      setLoadingStates(prev => ({ ...prev, sendingMessage: false }))
+    }
+  }
+
   const handleStartDM = async (dmUserId: string) => {
     if (!user?.id) {
       setError({ message: 'ユーザー情報が取得できません', type: 'error' })
@@ -622,7 +657,10 @@ export default function ChatPage() {
               </div>
             </div>
             <button
-              onClick={() => setShowProfileModal(true)}
+              onClick={() => {
+                setNewUserName(user?.name || '')
+                setShowProfileModal(true)
+              }}
               className="text-gray-400 hover:text-white p-1 hover:bg-gray-700 rounded-md transition"
               title="プロフィール設定"
             >
@@ -1005,7 +1043,8 @@ export default function ChatPage() {
               </label>
               <input
                 type="text"
-                defaultValue={user?.name}
+                value={newUserName}
+                onChange={(e) => setNewUserName(e.target.value)}
                 placeholder="表示名を入力"
                 className="w-full bg-gray-700 border border-gray-600 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-amber-500"
                 maxLength={50}
@@ -1054,10 +1093,18 @@ export default function ChatPage() {
               キャンセル
             </button>
             <button
-              onClick={() => setShowProfileModal(false)}
-              className="flex-1 px-4 py-2 bg-gradient-to-r from-yellow-400 to-amber-600 text-white rounded-lg hover:from-yellow-500 hover:to-amber-700 transition"
+              onClick={handleSaveProfile}
+              disabled={loadingStates.sendingMessage}
+              className="flex-1 px-4 py-2 bg-gradient-to-r from-yellow-400 to-amber-600 text-white rounded-lg hover:from-yellow-500 hover:to-amber-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              保存
+              {loadingStates.sendingMessage ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  保存中...
+                </>
+              ) : (
+                '保存'
+              )}
             </button>
           </div>
         </div>
