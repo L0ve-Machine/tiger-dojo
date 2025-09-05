@@ -16,6 +16,7 @@ import inviteRoutes from './routes/invite.routes'
 import lessonRoutes from './routes/lesson.routes'
 import subscriptionRoutes from './routes/subscription.routes'
 import userRoutes from './routes/user.routes'
+import dashboardRoutes from './routes/dashboard.routes'
 
 dotenv.config()
 
@@ -73,6 +74,7 @@ app.use('/api/lessons', lessonRoutes)
 app.use('/api/progress', lessonRoutes) // Legacy route for progress endpoints
 app.use('/api/subscriptions', subscriptionRoutes)
 app.use('/api/user', userRoutes)
+app.use('/api/dashboard', dashboardRoutes)
 
 // Health check
 app.get('/health', (req, res) => {

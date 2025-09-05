@@ -4,16 +4,15 @@ import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/auth'
-import { Play, Lock, Clock, Calendar, ChevronRight, ArrowLeft } from 'lucide-react'
-import Script from 'next/script'
+import { Play, Lock, Clock, Calendar, ChevronRight } from 'lucide-react'
 
 interface VimeoVideo {
   id: string
   embedId: string
   title: string
-  description?: string
   monthIndex: number
   orderIndex: number
+  releaseDate?: Date
 }
 
 export default function VideosPage() {
@@ -30,7 +29,6 @@ export default function VideosPage() {
       id: '1',
       embedId: '1115276237',
       title: 'サンプル動画１',
-      description: 'FXトレードの基礎を学びましょう',
       monthIndex: 0,
       orderIndex: 0
     },
@@ -38,7 +36,6 @@ export default function VideosPage() {
       id: '2',
       embedId: '1115277774',
       title: 'サンプル動画２',
-      description: 'チャート分析の基本',
       monthIndex: 0,
       orderIndex: 1
     },
@@ -47,17 +44,17 @@ export default function VideosPage() {
       id: '3',
       embedId: '1115278244',
       title: 'サンプル動画３',
-      description: 'リスク管理の重要性',
       monthIndex: 1,
-      orderIndex: 2
+      orderIndex: 2,
+      releaseDate: user?.createdAt ? new Date(new Date(user.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000) : undefined
     },
     {
       id: '4',
       embedId: '1115278388',
       title: 'サンプル動画４',
-      description: 'エントリーポイントの見極め方',
       monthIndex: 1,
-      orderIndex: 3
+      orderIndex: 3,
+      releaseDate: user?.createdAt ? new Date(new Date(user.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000) : undefined
     }
   ]
 
@@ -100,8 +97,21 @@ export default function VideosPage() {
   const getDaysUntilAvailable = (video: VimeoVideo): number => {
     if (isVideoAvailable(video)) return 0
     
+    if (video.releaseDate && user?.createdAt) {
+      const now = new Date()
+      const releaseDate = video.releaseDate
+      const timeDiff = releaseDate.getTime() - now.getTime()
+      const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24))
+      return Math.max(0, daysDiff)
+    }
+    
     const monthsToWait = video.monthIndex - availableMonths
     return monthsToWait * 30 // 簡略化のため1ヶ月=30日として計算
+  }
+
+  // Vimeoサムネイル画像URLを生成
+  const getVimeoThumbnail = (videoId: string): string => {
+    return `https://vumbnail.com/${videoId}.jpg`
   }
 
   // 月ごとに動画をグループ化
@@ -128,8 +138,6 @@ export default function VideosPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black">
-      <Script src="https://player.vimeo.com/api/player.js" />
-      
       {/* Header */}
       <header className="border-b border-gray-800 bg-black/50 backdrop-blur">
         <div className="max-w-7xl mx-auto px-6 py-4">
@@ -208,70 +216,86 @@ export default function VideosPage() {
                     
                     return (
                       <div key={video.id} className="space-y-4">
-                        <div className={`relative aspect-video bg-gray-900 rounded-xl overflow-hidden border border-gray-800 ${
-                          isAvailable ? 'hover:border-yellow-500/50' : 'opacity-60'
-                        } transition-all duration-300`}>
-                          
-                          {isAvailable ? (
-                            // Vimeo埋め込み
-                            <div className="w-full h-full">
-                              <iframe 
-                                src={`https://player.vimeo.com/video/${video.embedId}?title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479`}
-                                frameBorder="0" 
-                                allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media; web-share" 
-                                referrerPolicy="strict-origin-when-cross-origin"
-                                className="absolute top-0 left-0 w-full h-full"
-                                title={video.title}
-                              />
-                            </div>
-                          ) : (
-                            // ロック状態
-                            <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
-                              <div className="text-center">
-                                <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-3">
-                                  <Lock className="w-8 h-8 text-gray-500" />
+                        <Link 
+                          href={isAvailable ? `/lessons/${video.id}` : '#'}
+                          className={`block group ${isAvailable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                        >
+                          <div className={`relative aspect-video bg-gray-900 rounded-xl overflow-hidden border border-gray-800 ${
+                            isAvailable ? 'hover:border-yellow-500/50 group-hover:scale-[1.02]' : 'opacity-60'
+                          } transition-all duration-300`}>
+                            
+                            {isAvailable ? (
+                              // サムネイル画像
+                              <div className="w-full h-full relative">
+                                <img 
+                                  src={getVimeoThumbnail(video.embedId)}
+                                  alt={video.title}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    // フォールバック画像
+                                    const target = e.target as HTMLImageElement
+                                    target.src = '/api/placeholder/640/360'
+                                  }}
+                                />
+                                {/* プレイオーバーレイ */}
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
+                                  <div className="w-16 h-16 bg-yellow-400/90 rounded-full flex items-center justify-center transform group-hover:scale-110 transition-transform duration-300">
+                                    <Play className="w-8 h-8 text-black ml-1" />
+                                  </div>
                                 </div>
-                                <p className="text-sm font-medium text-gray-400">
-                                  あと{daysUntil}日で公開
-                                </p>
+                              </div>
+                            ) : (
+                              // ロック状態
+                              <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+                                <div className="text-center">
+                                  <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <Lock className="w-8 h-8 text-gray-500" />
+                                  </div>
+                                  <p className="text-sm font-medium text-gray-400">
+                                    あと{daysUntil}日で公開
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Status Badge */}
+                            <div className="absolute top-4 left-4 z-10">
+                              <div className={`px-3 py-1 text-xs rounded-full border backdrop-blur-sm ${
+                                isAvailable 
+                                  ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                  : 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+                              }`}>
+                                {isAvailable ? '視聴可能' : 'ロック中'}
                               </div>
                             </div>
-                          )}
 
-                          {/* Status Badge */}
-                          <div className="absolute top-4 left-4 z-10">
-                            <div className={`px-3 py-1 text-xs rounded-full border backdrop-blur-sm ${
-                              isAvailable 
-                                ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                                : 'bg-gray-500/20 text-gray-400 border-gray-500/30'
-                            }`}>
-                              {isAvailable ? '視聴可能' : 'ロック中'}
-                            </div>
+                            {/* Countdown for locked videos */}
+                            {!isAvailable && (
+                              <div className="absolute top-4 right-4 bg-black/80 backdrop-blur px-3 py-2 rounded-lg z-10">
+                                <div className="flex items-center gap-1 text-yellow-400">
+                                  <Calendar className="w-4 h-4" />
+                                  <span className="text-sm font-semibold">
+                                    {daysUntil}日後
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Duration Badge (視聴可能な場合のみ) */}
+                            {isAvailable && (
+                              <div className="absolute bottom-4 right-4 bg-black/80 backdrop-blur px-2 py-1 rounded text-xs text-white">
+                                <Clock className="w-3 h-3 inline mr-1" />
+                                30分
+                              </div>
+                            )}
                           </div>
-
-                          {/* Countdown for locked videos */}
-                          {!isAvailable && (
-                            <div className="absolute top-4 right-4 bg-black/80 backdrop-blur px-3 py-2 rounded-lg z-10">
-                              <div className="flex items-center gap-1 text-yellow-400">
-                                <Calendar className="w-4 h-4" />
-                                <span className="text-sm font-semibold">
-                                  {daysUntil}日後
-                                </span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                        </Link>
 
                         {/* Video Info */}
                         <div>
-                          <h3 className="text-xl font-bold text-white mb-1">
+                          <h3 className="text-xl font-bold text-white">
                             {video.title}
                           </h3>
-                          {video.description && (
-                            <p className="text-gray-400 text-sm">
-                              {video.description}
-                            </p>
-                          )}
                         </div>
                       </div>
                     )

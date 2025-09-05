@@ -161,6 +161,12 @@ export const courseApi = {
   getCourseStats: (courseId: string) => api.get(`/api/courses/${courseId}/stats`),
 }
 
+// Dashboard API functions
+export const dashboardApi = {
+  getStatistics: () => api.get('/api/dashboard/statistics'),
+  getLeaderboard: () => api.get('/api/dashboard/leaderboard'),
+}
+
 // Admin API functions
 export const adminApi = {
   // Dashboard & Analytics
