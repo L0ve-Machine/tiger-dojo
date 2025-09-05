@@ -84,6 +84,9 @@ export const authApi = {
   getCurrentUser: () => api.get('/api/auth/me'),
 
   verifyToken: () => api.get('/api/auth/verify-token'),
+
+  updateProfile: (data: { name: string }) =>
+    api.put('/api/auth/update-profile', data),
 }
 
 // Course API functions

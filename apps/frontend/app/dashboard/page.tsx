@@ -6,7 +6,7 @@ import { useAuthStore } from '@/lib/auth'
 import { LogOut, User, Settings, Play, Lock, Clock, Calendar, Menu, X, Trophy, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { dashboardApi, courseApi } from '@/lib/api'
+import { dashboardApi, courseApi, authApi } from '@/lib/api'
 
 interface DashboardStatistics {
   user: {
@@ -159,25 +159,14 @@ export default function DashboardPage() {
     
     setSaveNameLoading(true)
     try {
-      const response = await fetch('/api/auth/update-profile', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        },
-        body: JSON.stringify({ name: newName.trim() })
-      })
-
-      if (response.ok) {
-        await getCurrentUser() // ユーザー情報を再取得
-        setEditingName(false)
-        setShowSettingsModal(false)
-        setNewName('')
-      } else {
-        console.error('Failed to update name')
-      }
+      await authApi.updateProfile({ name: newName.trim() })
+      await getCurrentUser() // ユーザー情報を再取得
+      setEditingName(false)
+      setShowSettingsModal(false)
+      setNewName('')
     } catch (error) {
       console.error('Error updating name:', error)
+      // エラーメッセージを表示（必要に応じて）
     } finally {
       setSaveNameLoading(false)
     }
