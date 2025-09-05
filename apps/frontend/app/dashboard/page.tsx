@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/auth'
 import { LogOut, User, Settings, Play, Lock, Clock, Calendar, Menu, X, Trophy, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { dashboardApi, courseApi } from '@/lib/api'
 
 interface DashboardStatistics {
@@ -168,7 +169,13 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-8 md:w-10 h-8 md:h-10 bg-gradient-to-br from-yellow-400 to-amber-600 rounded-xl flex items-center justify-center shadow-lg">
-                <span className="text-lg md:text-xl">🦁</span>
+                <Image 
+                  src="/images/lion-tech.jpeg" 
+                  alt="Lion Logo" 
+                  width={32}
+                  height={32}
+                  className="rounded object-cover"
+                />
               </div>
               <h1 className="text-lg md:text-2xl font-bold bg-gradient-to-r from-yellow-400 to-amber-600 bg-clip-text text-transparent">
                 トレード道場

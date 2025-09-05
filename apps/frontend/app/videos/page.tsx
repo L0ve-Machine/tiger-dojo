@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/auth'
 import { Play, Lock, Clock, Calendar, ChevronRight } from 'lucide-react'
+import Image from 'next/image'
 
 interface VimeoVideo {
   id: string
@@ -143,9 +144,13 @@ export default function VideosPage() {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-amber-600 rounded-full flex items-center justify-center">
-                <span className="text-xl">🦁</span>
-              </div>
+              <Image 
+                src="/images/lion-tech.jpeg" 
+                alt="Lion Logo" 
+                width={40}
+                height={40}
+                className="rounded-lg object-cover"
+              />
               <h1 className="text-2xl font-bold bg-gradient-to-r from-yellow-400 to-amber-600 bg-clip-text text-transparent">
                 トレード道場
               </h1>
@@ -281,13 +286,6 @@ export default function VideosPage() {
                               </div>
                             )}
 
-                            {/* Duration Badge (視聴可能な場合のみ) */}
-                            {isAvailable && (
-                              <div className="absolute bottom-4 right-4 bg-black/80 backdrop-blur px-2 py-1 rounded text-xs text-white">
-                                <Clock className="w-3 h-3 inline mr-1" />
-                                30分
-                              </div>
-                            )}
                           </div>
                         </Link>
 
