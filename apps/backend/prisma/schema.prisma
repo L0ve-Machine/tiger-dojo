@@ -1,0 +1,285 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  password        String
+  name            String
+  role            String    @default("STUDENT")
+  discordName     String?
+  age             Int?
+  gender          String?
+  tradingExperience String?
+  registeredAt    DateTime  @default(now())
+  lastLoginAt     DateTime?
+  isActive        Boolean   @default(true)
+  emailVerified   Boolean   @default(false)
+  verificationToken String?
+  
+  sessions        Session[]
+  enrollments     Enrollment[]
+  progress        Progress[]
+  messages        ChatMessage[]
+  inviteLinks     InviteLink[]
+  registrations   Registration[]
+  subscriptions   Subscription[]
+  payments        Payment[]
+  lessonAccess    UserLessonAccess[]
+  grantedAccess   UserLessonAccess[] @relation("AccessGranter")
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Session {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  token           String    @unique
+  refreshToken    String    @unique
+  ipAddress       String?
+  userAgent       String?
+  expiresAt       DateTime
+  createdAt       DateTime  @default(now())
+}
+
+model Course {
+  id              String    @id @default(cuid())
+  title           String
+  description     String
+  thumbnail       String?
+  slug            String    @unique
+  isPublished     Boolean   @default(false)
+  price           Int?      // 将来の有料化対応（円単位）
+  
+  lessons         Lesson[]
+  enrollments     Enrollment[]
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Lesson {
+  id              String    @id @default(cuid())
+  courseId        String
+  course          Course    @relation(fields: [courseId], references: [id])
+  title           String
+  description     String?
+  videoUrl        String    // Vimeo video ID
+  thumbnail       String?   // サムネイル画像URL
+  duration        Int?      // 動画時間（秒）
+  orderIndex      Int       // 表示順
+  
+  // コンテンツ解放設定
+  releaseType     String    @default("IMMEDIATE")
+  releaseDays     Int?      // 登録から何日後に公開
+  releaseDate     DateTime? // 特定日に公開
+  prerequisiteId  String?   // 前提となるレッスンID
+  prerequisite    Lesson?   @relation("LessonPrerequisite", fields: [prerequisiteId], references: [id])
+  dependentLessons Lesson[] @relation("LessonPrerequisite")
+  
+  progress        Progress[]
+  resources       Resource[]
+  chatMessages    ChatMessage[]
+  userAccess      UserLessonAccess[]
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Resource {
+  id              String    @id @default(cuid())
+  lessonId        String
+  lesson          Lesson    @relation(fields: [lessonId], references: [id])
+  title           String
+  description     String?
+  fileUrl         String
+  fileType        String    // pdf, xlsx, etc.
+  fileSize        Int?      // bytes
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Enrollment {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  courseId        String
+  course          Course    @relation(fields: [courseId], references: [id])
+  enrolledAt      DateTime  @default(now())
+  completedAt     DateTime?
+  
+  @@unique([userId, courseId])
+}
+
+model Progress {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  lessonId        String
+  lesson          Lesson    @relation(fields: [lessonId], references: [id])
+  watchedSeconds  Int       @default(0)
+  completed       Boolean   @default(false)
+  completedAt     DateTime?
+  lastWatchedAt   DateTime  @default(now())
+  
+  @@unique([userId, lessonId])
+}
+
+// アドホック配信用のユーザー別レッスンアクセス権限
+model UserLessonAccess {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  lessonId        String
+  lesson          Lesson    @relation(fields: [lessonId], references: [id])
+  
+  // アクセス権限の詳細
+  grantedBy       String    // 権限を付与した管理者のID
+  granter         User      @relation("AccessGranter", fields: [grantedBy], references: [id])
+  reason          String?   // 権限付与の理由
+  
+  // アクセス期間（nullの場合は無期限）
+  startDate       DateTime  @default(now())
+  endDate         DateTime? 
+  
+  // ステータス
+  isActive        Boolean   @default(true)
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@unique([userId, lessonId])
+}
+
+model ChatMessage {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  lessonId        String?
+  lesson          Lesson?   @relation(fields: [lessonId], references: [id])
+  courseId        String?   // For course-level chat channels
+  channelId       String    @default("general") // Channel identifier (general, announcements, questions, resources)
+  dmRoomId        String?   // For direct messages (format: userId1_userId2)
+  content         String
+  type            String    @default("TEXT")
+  isEdited        Boolean   @default(false)
+  editedAt        DateTime?
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// Invite System Models
+model InviteLink {
+  id              String    @id @default(cuid())
+  code            String    @unique @default(cuid())
+  createdBy       String
+  creator         User      @relation(fields: [createdBy], references: [id])
+  
+  maxUses         Int?
+  usedCount       Int       @default(0)
+  expiresAt       DateTime?
+  isActive        Boolean   @default(true)
+  
+  description     String?
+  
+  registrations   Registration[]
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Registration {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  inviteId        String
+  invite          InviteLink @relation(fields: [inviteId], references: [id])
+  
+  registeredAt    DateTime  @default(now())
+  
+  @@unique([userId, inviteId])
+}
+
+// Subscription System Models
+model SubscriptionPlan {
+  id              String    @id @default(cuid())
+  name            String    @unique
+  description     String?
+  price           Int       // 円単位
+  duration        Int       // 日数（30=月額、365=年額）
+  features        String    // JSON string of features
+  isActive        Boolean   @default(true)
+  
+  subscriptions   Subscription[]
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Subscription {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  planId          String
+  plan            SubscriptionPlan @relation(fields: [planId], references: [id])
+  
+  status          String    @default("ACTIVE") // ACTIVE, EXPIRED, CANCELLED, PENDING
+  startDate       DateTime  @default(now())
+  endDate         DateTime
+  autoRenew       Boolean   @default(true)
+  
+  // Payment tracking
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  
+  payments        Payment[]
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Payment {
+  id              String    @id @default(cuid())
+  subscriptionId  String
+  subscription    Subscription @relation(fields: [subscriptionId], references: [id])
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  
+  amount          Int       // 円単位
+  currency        String    @default("JPY")
+  status          String    @default("PENDING") // PENDING, COMPLETED, FAILED, REFUNDED
+  method          String?   // STRIPE, BANK_TRANSFER, etc.
+  
+  // Stripe integration
+  stripePaymentIntentId String?
+  stripeChargeId        String?
+  
+  paidAt          DateTime?
+  refundedAt      DateTime?
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// Enums are not supported in SQLite, using String instead
+// Role: STUDENT, INSTRUCTOR, ADMIN
+// Gender: MALE, FEMALE, OTHER, PREFER_NOT_TO_SAY
+// TradingExperience: BEGINNER, UNDER_1_YEAR, ONE_TO_THREE, OVER_THREE
+// ReleaseType: IMMEDIATE, SCHEDULED, DRIP, PREREQUISITE
+// MessageType: TEXT, QUESTION, ANSWER, ANNOUNCEMENT
+// SubscriptionStatus: ACTIVE, EXPIRED, CANCELLED, PENDING
+// PaymentStatus: PENDING, COMPLETED, FAILED, REFUNDED
+// PaymentMethod: STRIPE, BANK_TRANSFER

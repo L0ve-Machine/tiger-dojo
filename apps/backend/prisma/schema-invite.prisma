@@ -1,0 +1,32 @@
+// Add this to main schema.prisma
+
+model InviteLink {
+  id              String    @id @default(cuid())
+  code            String    @unique @default(cuid())
+  createdBy       String
+  creator         User      @relation(fields: [createdBy], references: [id])
+  
+  maxUses         Int?      // null = unlimited
+  usedCount       Int       @default(0)
+  expiresAt       DateTime?
+  isActive        Boolean   @default(true)
+  
+  description     String?   // メモ・説明用
+  
+  registrations   Registration[]
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Registration {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  inviteId        String
+  invite          InviteLink @relation(fields: [inviteId], references: [id])
+  
+  registeredAt    DateTime  @default(now())
+  
+  @@unique([userId, inviteId])
+}

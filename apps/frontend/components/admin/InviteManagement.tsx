@@ -1,0 +1,504 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Loader2, Plus, Copy, Eye, ToggleLeft, ToggleRight, Trash2, Users, Link } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
+
+interface InviteLink {
+  id: string
+  code: string
+  maxUses: number | null
+  usedCount: number
+  expiresAt: string | null
+  isActive: boolean
+  description: string | null
+  creator: {
+    name: string
+    email: string
+    role: string
+  }
+  registrations: Array<{
+    user: {
+      name: string
+      email: string
+      createdAt: string
+    }
+  }>
+  createdAt: string
+}
+
+interface InviteStats {
+  totalActiveInvites: number
+  totalRegistrations: number
+  recentRegistrations: Array<{
+    user: {
+      name: string
+      email: string
+    }
+    invite: {
+      description: string | null
+    }
+    registeredAt: string
+  }>
+}
+
+export default function InviteManagement() {
+  const { toast } = useToast()
+  const [invites, setInvites] = useState<InviteLink[]>([])
+  const [stats, setStats] = useState<InviteStats | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isCreatingInvite, setIsCreatingInvite] = useState(false)
+  const [selectedInvite, setSelectedInvite] = useState<InviteLink | null>(null)
+  
+  const [createForm, setCreateForm] = useState({
+    maxUses: '',
+    expiresAt: '',
+    description: ''
+  })
+
+  const fetchInvites = async () => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/invites/list`, {
+        credentials: 'include'
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setInvites(data.invites)
+      }
+    } catch (error) {
+      console.error('Failed to fetch invites:', error)
+    }
+  }
+
+  const fetchStats = async () => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/invites/stats/overview`, {
+        credentials: 'include'
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setStats(data.stats)
+      }
+    } catch (error) {
+      console.error('Failed to fetch stats:', error)
+    }
+  }
+
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true)
+      await Promise.all([fetchInvites(), fetchStats()])
+      setIsLoading(false)
+    }
+    
+    loadData()
+  }, [])
+
+  const createInvite = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsCreatingInvite(true)
+
+    try {
+      const requestData: any = {
+        description: createForm.description || undefined
+      }
+
+      if (createForm.maxUses) {
+        requestData.maxUses = parseInt(createForm.maxUses)
+      }
+
+      if (createForm.expiresAt) {
+        requestData.expiresAt = new Date(createForm.expiresAt).toISOString()
+      }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/invites/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify(requestData)
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast({
+          title: "招待リンク作成完了",
+          description: "新しい招待リンクが作成されました"
+        })
+        
+        // Reset form
+        setCreateForm({ maxUses: '', expiresAt: '', description: '' })
+        
+        // Refresh data
+        await Promise.all([fetchInvites(), fetchStats()])
+        
+        // Copy invite URL to clipboard
+        const inviteUrl = `${window.location.origin}/register?invite=${data.invite.code}`
+        navigator.clipboard.writeText(inviteUrl)
+        
+        toast({
+          title: "クリップボードにコピーしました",
+          description: "招待URLがクリップボードにコピーされました"
+        })
+      } else {
+        toast({
+          title: "エラー",
+          description: data.error || "招待リンクの作成に失敗しました",
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "エラー",
+        description: "招待リンクの作成中にエラーが発生しました",
+        variant: "destructive"
+      })
+    } finally {
+      setIsCreatingInvite(false)
+    }
+  }
+
+  const toggleInvite = async (id: string, isActive: boolean) => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/invites/${id}/toggle`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ isActive })
+      })
+
+      if (response.ok) {
+        toast({
+          title: `招待リンク${isActive ? '有効化' : '無効化'}完了`,
+          description: `招待リンクを${isActive ? '有効' : '無効'}にしました`
+        })
+        fetchInvites()
+      } else {
+        toast({
+          title: "エラー",
+          description: "招待リンクの更新に失敗しました",
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "エラー",
+        description: "招待リンクの更新中にエラーが発生しました",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const deleteInvite = async (id: string) => {
+    if (!confirm('この招待リンクを削除しますか？関連する登録記録も削除されます。')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/invites/${id}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        toast({
+          title: "削除完了",
+          description: "招待リンクが削除されました"
+        })
+        fetchInvites()
+        fetchStats()
+      } else {
+        toast({
+          title: "エラー",
+          description: "招待リンクの削除に失敗しました",
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "エラー",
+        description: "招待リンクの削除中にエラーが発生しました",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const copyInviteUrl = (code: string) => {
+    const inviteUrl = `${window.location.origin}/register?invite=${code}`
+    navigator.clipboard.writeText(inviteUrl)
+    toast({
+      title: "コピー完了",
+      description: "招待URLがクリップボードにコピーされました"
+    })
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Link className="h-5 w-5 text-blue-500" />
+              <div>
+                <p className="text-sm text-gray-600">アクティブ招待リンク</p>
+                <p className="text-2xl font-bold">{stats?.totalActiveInvites || 0}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Users className="h-5 w-5 text-green-500" />
+              <div>
+                <p className="text-sm text-gray-600">総登録者数</p>
+                <p className="text-2xl font-bold">{stats?.totalRegistrations || 0}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Users className="h-5 w-5 text-orange-500" />
+              <div>
+                <p className="text-sm text-gray-600">最近30日の登録</p>
+                <p className="text-2xl font-bold">{stats?.recentRegistrations.length || 0}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Create Invite Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Plus className="h-5 w-5" />
+            <span>新しい招待リンク作成</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={createInvite} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="maxUses">最大使用回数 (空白で無制限)</Label>
+                <Input
+                  id="maxUses"
+                  type="number"
+                  min="1"
+                  placeholder="例: 5"
+                  value={createForm.maxUses}
+                  onChange={(e) => setCreateForm({ ...createForm, maxUses: e.target.value })}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="expiresAt">有効期限 (空白で無期限)</Label>
+                <Input
+                  id="expiresAt"
+                  type="datetime-local"
+                  value={createForm.expiresAt}
+                  onChange={(e) => setCreateForm({ ...createForm, expiresAt: e.target.value })}
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="description">説明・メモ</Label>
+              <Textarea
+                id="description"
+                placeholder="例: 新規メンバー向け招待リンク"
+                value={createForm.description}
+                onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
+              />
+            </div>
+            
+            <Button type="submit" disabled={isCreatingInvite}>
+              {isCreatingInvite && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              招待リンクを作成
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* Invites List */}
+      <Card>
+        <CardHeader>
+          <CardTitle>招待リンク一覧</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {invites.length === 0 ? (
+            <Alert>
+              <AlertDescription>招待リンクがありません。新しい招待リンクを作成してください。</AlertDescription>
+            </Alert>
+          ) : (
+            invites.map((invite) => (
+              <div key={invite.id} className="border rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Badge variant={invite.isActive ? "default" : "secondary"}>
+                      {invite.isActive ? 'アクティブ' : '無効'}
+                    </Badge>
+                    <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded">
+                      {invite.code}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => copyInviteUrl(invite.code)}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedInvite(invite)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-2xl">
+                        <DialogHeader>
+                          <DialogTitle>招待リンク詳細</DialogTitle>
+                        </DialogHeader>
+                        {selectedInvite && (
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <Label>招待コード</Label>
+                                <p className="font-mono text-sm bg-gray-100 p-2 rounded">{selectedInvite.code}</p>
+                              </div>
+                              <div>
+                                <Label>作成者</Label>
+                                <p>{selectedInvite.creator.name} ({selectedInvite.creator.email})</p>
+                              </div>
+                              <div>
+                                <Label>使用状況</Label>
+                                <p>{selectedInvite.usedCount} / {selectedInvite.maxUses || '無制限'}</p>
+                              </div>
+                              <div>
+                                <Label>有効期限</Label>
+                                <p>{selectedInvite.expiresAt ? new Date(selectedInvite.expiresAt).toLocaleString('ja-JP') : '無期限'}</p>
+                              </div>
+                            </div>
+                            
+                            {selectedInvite.description && (
+                              <div>
+                                <Label>説明</Label>
+                                <p>{selectedInvite.description}</p>
+                              </div>
+                            )}
+                            
+                            <div>
+                              <Label>登録ユーザー ({selectedInvite.registrations.length}人)</Label>
+                              <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
+                                {selectedInvite.registrations.map((reg, index) => (
+                                  <div key={index} className="flex justify-between items-center text-sm bg-gray-50 p-2 rounded">
+                                    <span>{reg.user.name} ({reg.user.email})</span>
+                                    <span className="text-gray-500">
+                                      {new Date(reg.user.createdAt).toLocaleDateString('ja-JP')}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </DialogContent>
+                    </Dialog>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => toggleInvite(invite.id, !invite.isActive)}
+                    >
+                      {invite.isActive ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => deleteInvite(invite.id)}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="text-sm text-gray-600 grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <span>使用回数: {invite.usedCount} / {invite.maxUses || '無制限'}</span>
+                  <span>有効期限: {invite.expiresAt ? new Date(invite.expiresAt).toLocaleDateString('ja-JP') : '無期限'}</span>
+                  <span>作成日: {new Date(invite.createdAt).toLocaleDateString('ja-JP')}</span>
+                </div>
+                
+                {invite.description && (
+                  <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded">{invite.description}</p>
+                )}
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Recent Registrations */}
+      {stats?.recentRegistrations && stats.recentRegistrations.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>最近の登録 (30日以内)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {stats.recentRegistrations.map((reg, index) => (
+                <div key={index} className="flex justify-between items-center py-2 border-b">
+                  <div>
+                    <p className="font-medium">{reg.user.name}</p>
+                    <p className="text-sm text-gray-600">{reg.user.email}</p>
+                    {reg.invite.description && (
+                      <p className="text-xs text-gray-500">招待: {reg.invite.description}</p>
+                    )}
+                  </div>
+                  <span className="text-sm text-gray-500">
+                    {new Date(reg.registeredAt).toLocaleDateString('ja-JP')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}

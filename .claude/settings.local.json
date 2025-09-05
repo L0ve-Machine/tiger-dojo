@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(npx create-next-app:*)",
+      "Bash(npm init:*)",
+      "Bash(npm install:*)",
+      "Bash(npx prisma generate:*)",
+      "Bash(npx prisma migrate dev:*)",
+      "Bash(npm run seed:*)",
+      "Bash(npm run dev:*)",
+      "Bash(curl:*)",
+      "Bash(taskkill:*)",
+      "Bash(cmd //c:*)",
+      "Bash(npx prisma:*)",
+      "Bash(npx tsx:*)",
+      "WebSearch",
+      "WebFetch(domain:flowbite.com)",
+      "Bash(node:*)",
+      "WebFetch(domain:sites.google.com)",
+      "Bash(copy:*)",
+      "Bash(tree:*)",
+      "Bash(dir)",
+      "Bash(dir appsbackend)",
+      "Bash(dir apps)",
+      "Bash(npm run:*)",
+      "Bash(dir:*)",
+      "Bash(rd:*)",
+      "Bash(sqlite3:*)",
+      "Bash(cmd /c:*)",
+      "Bash(tasklist:*)",
+      "Bash(npx kill-port:*)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(git add:*)",
+      "Bash(del appsbackendnul)",
+      "Bash(rm:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
