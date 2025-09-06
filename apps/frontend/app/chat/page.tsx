@@ -264,7 +264,7 @@ export default function ChatPage() {
     setError(null)
     
     try {
-      await sendMessage(sanitizedMessage)
+      sendMessage(sanitizedMessage)
       setMessageInput('')
       
       if (isTyping) {

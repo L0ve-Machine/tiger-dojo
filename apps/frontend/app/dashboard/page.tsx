@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/auth-store'
-import { LogOut, User, Settings, Play, Lock, Clock, Calendar, Menu, X, Trophy, TrendingUp } from 'lucide-react'
+import { LogOut, Settings, Play, Lock, Clock, Calendar, Menu, X, Trophy, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { dashboardApi, courseApi, authApi } from '@/lib/api'
@@ -225,8 +225,8 @@ export default function DashboardPage() {
               
               <div className="flex items-center gap-3 pl-6 border-l border-gray-600">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center">
-                    <User className="w-4 h-4 text-gray-300" />
+                  <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-amber-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                    {user.name?.charAt(0).toUpperCase()}
                   </div>
                   <span className="text-white text-sm font-medium">{user.name}</span>
                 </div>
@@ -286,8 +286,8 @@ export default function DashboardPage() {
                 
                 <div className="pt-4 border-t border-gray-700">
                   <div className="flex items-center gap-2 mb-4">
-                    <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center">
-                      <User className="w-4 h-4 text-gray-300" />
+                    <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-amber-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                      {user.name?.charAt(0).toUpperCase()}
                     </div>
                     <span className="text-white text-sm font-medium">{user.name}</span>
                   </div>

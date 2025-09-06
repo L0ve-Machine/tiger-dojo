@@ -68,12 +68,14 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     const state = get()
     if (state.socket?.connected) return
 
-    const socket = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000', {
+    const socketUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://trade-dojo-fx.com'
+    const socket = io(socketUrl, {
       auth: { token },
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionDelay: 1000,
-      reconnectionAttempts: 5
+      reconnectionAttempts: 5,
+      forceNew: true
     })
 
     // Connection events
