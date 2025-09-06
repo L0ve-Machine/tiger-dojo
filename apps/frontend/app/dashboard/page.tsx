@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuthStore } from '@/lib/auth'
+import { useAuthStore } from '@/lib/auth-store'
 import { LogOut, User, Settings, Play, Lock, Clock, Calendar, Menu, X, Trophy, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -175,7 +175,7 @@ export default function DashboardPage() {
   }
 
   const openSettingsModal = () => {
-    setNewName(user.name || '')
+    setNewName(user?.name || '')
     setShowSettingsModal(true)
   }
 

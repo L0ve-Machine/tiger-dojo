@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuthStore } from '@/lib/auth'
+import { useAuthStore } from '@/lib/auth-store'
 import Link from 'next/link'
 import { 
   BarChart3, 

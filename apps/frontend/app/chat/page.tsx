@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuthStore } from '@/lib/auth'
+import { useAuthStore } from '@/lib/auth-store'
 import { useSocketStore } from '@/lib/socket'
 import { authApi } from '@/lib/api'
 import { Send, Users, Hash, AtSign, Settings, Plus, Search, Mic, Menu, X, AlertTriangle, Loader2 } from 'lucide-react'

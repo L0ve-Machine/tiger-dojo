@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter, useParams } from 'next/navigation'
-import { useAuthStore } from '@/lib/auth'
+import { useAuthStore } from '@/lib/auth-store'
 import { ChevronRight, ArrowLeft, Play, Pause, Volume2, VolumeX, Maximize } from 'lucide-react'
 import Image from 'next/image'
 

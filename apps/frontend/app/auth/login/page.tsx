@@ -7,7 +7,7 @@ import { ArrowLeft, Eye, EyeOff, Loader2, Lock, Mail } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
-import { useAuthStore } from '@/lib/auth'
+import { useAuthStore } from '@/lib/auth-store'
 
 export default function LoginPage() {
   const router = useRouter()

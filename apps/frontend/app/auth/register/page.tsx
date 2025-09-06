@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useAuthStore, RegisterData } from '@/lib/auth'
+import { useAuthStore, RegisterData } from '@/lib/auth-store'
 import { FormField } from '@/components/forms/FormField'
 import { ArrowLeft, Loader2, Check } from 'lucide-react'
 
