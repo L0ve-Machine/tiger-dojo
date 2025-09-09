@@ -82,6 +82,133 @@ router.get('/chat/messages', AdminController.getChatMessages)
 router.delete('/chat/messages/:id', AdminController.deleteChatMessage)
 router.put('/chat/messages/:id/moderate', AdminController.moderateMessage)
 
+// Chat Room Management
+router.get('/chat/rooms', async (req: express.Request, res: express.Response) => {
+  try {
+    const { prisma } = require('../index')
+    
+    // Get all chat rooms (courses used as chat rooms)
+    const rooms = await prisma.course.findMany({
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        createdAt: true,
+        _count: {
+          select: {
+            messages: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    })
+
+    res.json({
+      success: true,
+      rooms
+    })
+  } catch (error) {
+    console.error('Get chat rooms error:', error)
+    res.status(500).json({
+      error: 'チャットルーム情報の取得に失敗しました'
+    })
+  }
+})
+
+router.post('/chat/rooms', async (req: express.Request, res: express.Response) => {
+  try {
+    const { title, slug } = req.body
+    const { prisma } = require('../index')
+
+    if (!title || !slug) {
+      return res.status(400).json({
+        error: 'タイトルとスラッグが必要です'
+      })
+    }
+
+    // Check if slug already exists
+    const existingRoom = await prisma.course.findUnique({
+      where: { slug }
+    })
+
+    if (existingRoom) {
+      return res.status(400).json({
+        error: 'このスラッグは既に使用されています'
+      })
+    }
+
+    const room = await prisma.course.create({
+      data: {
+        title,
+        slug,
+        description: `${title}のチャットルーム`,
+        isPublished: true
+      }
+    })
+
+    res.json({
+      success: true,
+      message: 'チャットルームが作成されました',
+      room: {
+        id: room.id,
+        title: room.title,
+        slug: room.slug,
+        createdAt: room.createdAt
+      }
+    })
+  } catch (error) {
+    console.error('Create chat room error:', error)
+    res.status(500).json({
+      error: 'チャットルームの作成に失敗しました'
+    })
+  }
+})
+
+router.delete('/chat/rooms/:id', async (req: express.Request, res: express.Response) => {
+  try {
+    const { id } = req.params
+    const { prisma } = require('../index')
+
+    // Check if room exists
+    const room = await prisma.course.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            messages: true
+          }
+        }
+      }
+    })
+
+    if (!room) {
+      return res.status(404).json({
+        error: 'チャットルームが見つかりません'
+      })
+    }
+
+    // Delete all messages in the room first
+    await prisma.chatMessage.deleteMany({
+      where: { courseId: id }
+    })
+
+    // Delete the room
+    await prisma.course.delete({
+      where: { id }
+    })
+
+    res.json({
+      success: true,
+      message: `${room.title} チャットルームが削除されました`
+    })
+  } catch (error) {
+    console.error('Delete chat room error:', error)
+    res.status(500).json({
+      error: 'チャットルームの削除に失敗しました'
+    })
+  }
+})
+
 // Pending Users Management  
 router.get('/pending-users', async (req: express.Request, res: express.Response) => {
   try {
@@ -107,6 +234,86 @@ router.get('/pending-users', async (req: express.Request, res: express.Response)
     console.error('Get pending users error:', error)
     res.status(500).json({
       error: '承認待ちユーザー情報の取得に失敗しました'
+    })
+  }
+})
+
+// User Approval Management
+router.post('/approve-user/:token', async (req: express.Request, res: express.Response) => {
+  try {
+    const { token } = req.params
+    const { prisma } = require('../index')
+    
+    const pendingUser = await prisma.pendingUser.findUnique({
+      where: { approvalToken: token, status: 'PENDING' }
+    })
+
+    if (!pendingUser) {
+      return res.status(404).json({
+        error: '承認待ちユーザーが見つからないか、既に処理されています'
+      })
+    }
+
+    // Create approved user
+    const approvedUser = await prisma.user.create({
+      data: {
+        email: pendingUser.email,
+        name: pendingUser.name,
+        password: pendingUser.password,
+        role: 'USER',
+        isActive: true,
+        emailVerified: true
+      }
+    })
+
+    // Update pending user status
+    await prisma.pendingUser.update({
+      where: { id: pendingUser.id },
+      data: { status: 'APPROVED' }
+    })
+
+    res.json({
+      success: true,
+      message: 'ユーザーが承認されました',
+      user: { id: approvedUser.id, email: approvedUser.email, name: approvedUser.name }
+    })
+  } catch (error) {
+    console.error('User approval error:', error)
+    res.status(500).json({
+      error: 'ユーザー承認処理中にエラーが発生しました'
+    })
+  }
+})
+
+router.post('/reject-user/:token', async (req: express.Request, res: express.Response) => {
+  try {
+    const { token } = req.params
+    const { prisma } = require('../index')
+    
+    const pendingUser = await prisma.pendingUser.findUnique({
+      where: { approvalToken: token, status: 'PENDING' }
+    })
+
+    if (!pendingUser) {
+      return res.status(404).json({
+        error: '承認待ちユーザーが見つからないか、既に処理されています'
+      })
+    }
+
+    // Update pending user status
+    await prisma.pendingUser.update({
+      where: { id: pendingUser.id },
+      data: { status: 'REJECTED' }
+    })
+
+    res.json({
+      success: true,
+      message: 'ユーザーが拒否されました'
+    })
+  } catch (error) {
+    console.error('User rejection error:', error)
+    res.status(500).json({
+      error: 'ユーザー拒否処理中にエラーが発生しました'
     })
   }
 })

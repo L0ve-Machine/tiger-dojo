@@ -47,7 +47,6 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     { icon: BarChart3, label: 'ダッシュボード', href: '/admin', adminOnly: false },
     { icon: UserCheck, label: '承認待ちユーザー', href: '/admin/pending-users', adminOnly: true },
     { icon: Users, label: 'ユーザー管理', href: '/admin/users', adminOnly: true },
-    { icon: BookOpen, label: 'コース管理', href: '/admin/courses', adminOnly: false },
     { icon: Video, label: 'レッスン管理', href: '/admin/lessons', adminOnly: false },
     { icon: Upload, label: '動画アップロード', href: '/admin/upload', adminOnly: false },
     { icon: MessageSquare, label: 'チャット管理', href: '/admin/chat', adminOnly: true },
@@ -102,17 +101,6 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 <span>{item.label}</span>
               </Link>
             ))}
-
-            <div className="border-t border-gray-800 pt-4 mt-4">
-              <Link
-                href="/dashboard"
-                className="flex items-center gap-3 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-                onClick={() => setSidebarOpen(false)}
-              >
-                <Home className="w-5 h-5" />
-                <span>生徒画面に戻る</span>
-              </Link>
-            </div>
           </nav>
 
           {/* Admin Info */}

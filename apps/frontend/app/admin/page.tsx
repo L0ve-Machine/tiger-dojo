@@ -110,25 +110,11 @@ export default function AdminDashboard() {
       description: '30日以内のログイン'
     },
     {
-      title: 'コース数',
-      value: stats.totalCourses,
-      icon: BookOpen,
-      color: 'from-purple-500 to-purple-600',
-      description: '公開済みコース'
-    },
-    {
       title: 'レッスン数',
       value: stats.totalLessons,
       icon: Video,
       color: 'from-gold-500 to-gold-600',
       description: '動画レッスン'
-    },
-    {
-      title: '完了数',
-      value: stats.courseCompletions,
-      icon: TrendingUp,
-      color: 'from-emerald-500 to-emerald-600',
-      description: 'レッスン完了'
     },
     {
       title: '新規登録',
@@ -238,7 +224,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <a
           href="/admin/users"
           className="bg-gray-900/50 rounded-xl border border-gray-800 p-4 hover:bg-gray-900/70 transition-colors group"
@@ -248,19 +234,6 @@ export default function AdminDashboard() {
             <div>
               <p className="font-medium text-white">ユーザー管理</p>
               <p className="text-sm text-gray-400">登録者を管理</p>
-            </div>
-          </div>
-        </a>
-
-        <a
-          href="/admin/courses"
-          className="bg-gray-900/50 rounded-xl border border-gray-800 p-4 hover:bg-gray-900/70 transition-colors group"
-        >
-          <div className="flex items-center gap-3">
-            <BookOpen className="w-8 h-8 text-purple-400 group-hover:text-purple-300 transition-colors" />
-            <div>
-              <p className="font-medium text-white">コース管理</p>
-              <p className="text-sm text-gray-400">コンテンツ管理</p>
             </div>
           </div>
         </a>

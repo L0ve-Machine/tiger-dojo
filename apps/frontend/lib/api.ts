@@ -172,7 +172,9 @@ export const dashboardApi = {
 
 // Create admin-specific axios instance without user authentication
 const adminApiClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000',
+  baseURL: process.env.NEXT_PUBLIC_API_URL ? 
+    process.env.NEXT_PUBLIC_API_URL.replace(/\/api$/, '') : 
+    'http://localhost:5000',
   timeout: 10000,
   withCredentials: false, // Don't send auth cookies for admin-only endpoints
 })
@@ -193,6 +195,9 @@ export const adminApi = {
   }) => adminApiClient.get('/api/admin/users', { params }),
   
   getPendingUsers: () => adminApiClient.get('/api/admin/pending-users'),
+  
+  approveUser: (token: string) => adminApiClient.post(`/api/admin/approve-user/${token}`),
+  rejectUser: (token: string) => adminApiClient.post(`/api/admin/reject-user/${token}`),
   
   getUserById: (userId: string) => adminApiClient.get(`/api/admin/users/${userId}`),
   
@@ -277,6 +282,13 @@ export const adminApi = {
   
   moderateMessage: (messageId: string, content: string) => 
     adminApiClient.put(`/api/admin/chat/messages/${messageId}/moderate`, { content }),
+
+  // Chat Room Management
+  getChatRooms: () => adminApiClient.get('/api/admin/chat/rooms'),
+  createChatRoom: (data: { title: string; slug: string }) => 
+    adminApiClient.post('/api/admin/chat/rooms', data),
+  deleteChatRoom: (roomId: string) => 
+    adminApiClient.delete(`/api/admin/chat/rooms/${roomId}`),
 
   // System Settings
   getSettings: () => adminApiClient.get('/api/admin/settings'),

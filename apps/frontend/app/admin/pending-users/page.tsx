@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { adminApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
-import { Loader2, User, Mail, Calendar, ExternalLink, RefreshCw } from 'lucide-react'
+import { Loader2, User, Mail, Calendar, Check, X, RefreshCw } from 'lucide-react'
 
 interface PendingUser {
   id: string
@@ -19,6 +19,7 @@ export default function PendingUsersPage() {
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const [processingUser, setProcessingUser] = useState<string | null>(null)
 
   useEffect(() => {
     fetchPendingUsers()
@@ -39,6 +40,46 @@ export default function PendingUsersPage() {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('ja-JP')
+  }
+
+  const handleApproveUser = async (user: PendingUser) => {
+    if (!confirm(`${user.name} (${user.email}) を承認しますか？`)) {
+      return
+    }
+
+    try {
+      setProcessingUser(user.id)
+      await adminApi.approveUser(user.approvalToken)
+      
+      // Remove from pending list
+      setPendingUsers(prev => prev.filter(u => u.id !== user.id))
+      alert('ユーザーが承認されました')
+    } catch (error: any) {
+      console.error('承認エラー:', error)
+      alert(error.response?.data?.error || 'ユーザーの承認に失敗しました')
+    } finally {
+      setProcessingUser(null)
+    }
+  }
+
+  const handleRejectUser = async (user: PendingUser) => {
+    if (!confirm(`${user.name} (${user.email}) を拒否しますか？\n\nこの操作は元に戻せません。`)) {
+      return
+    }
+
+    try {
+      setProcessingUser(user.id)
+      await adminApi.rejectUser(user.approvalToken)
+      
+      // Remove from pending list
+      setPendingUsers(prev => prev.filter(u => u.id !== user.id))
+      alert('ユーザーが拒否されました')
+    } catch (error: any) {
+      console.error('拒否エラー:', error)
+      alert(error.response?.data?.error || 'ユーザーの拒否に失敗しました')
+    } finally {
+      setProcessingUser(null)
+    }
   }
 
 
@@ -116,13 +157,30 @@ export default function PendingUsersPage() {
                   )}
                 </div>
                 
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-2">
                   <Button
-                    onClick={() => window.open(`/admin/approve/${pendingUser.approvalToken}`, '_blank')}
-                    className="bg-gradient-to-r from-gold-500 to-gold-600 text-black hover:from-gold-600 hover:to-gold-700"
+                    onClick={() => handleRejectUser(pendingUser)}
+                    disabled={processingUser === pendingUser.id}
+                    className="bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
                   >
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    承認・拒否画面へ
+                    {processingUser === pendingUser.id ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <X className="mr-2 h-4 w-4" />
+                    )}
+                    拒否
+                  </Button>
+                  <Button
+                    onClick={() => handleApproveUser(pendingUser)}
+                    disabled={processingUser === pendingUser.id}
+                    className="bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 disabled:opacity-50"
+                  >
+                    {processingUser === pendingUser.id ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Check className="mr-2 h-4 w-4" />
+                    )}
+                    承認
                   </Button>
                 </div>
               </CardContent>

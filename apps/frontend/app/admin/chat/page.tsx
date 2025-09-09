@@ -14,10 +14,14 @@ import {
   Clock,
   MessageCircle,
   Flag,
-  Edit3
+  Edit3,
+  Plus,
+  Home,
+  Hash
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 
 interface ChatMessage {
@@ -49,17 +53,32 @@ interface ChatStats {
   questionMessages: number
 }
 
+interface ChatRoom {
+  id: string
+  title: string
+  slug: string
+  createdAt: string
+  _count: {
+    messages: number
+  }
+}
+
 export default function ChatManagementPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [rooms, setRooms] = useState<ChatRoom[]>([])
   const [stats, setStats] = useState<ChatStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('')
   const [selectedMessages, setSelectedMessages] = useState<string[]>([])
+  const [showCreateRoom, setShowCreateRoom] = useState(false)
+  const [newRoom, setNewRoom] = useState({ title: '', slug: '' })
+  const [roomsLoading, setRoomsLoading] = useState(false)
 
   useEffect(() => {
     fetchChatData()
+    fetchChatRooms()
   }, [])
 
   const fetchChatData = async () => {
@@ -92,6 +111,18 @@ export default function ChatManagementPage() {
       setError(err.response?.data?.error || err.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchChatRooms = async () => {
+    try {
+      setRoomsLoading(true)
+      const response = await adminApi.getChatRooms()
+      setRooms(response.data.rooms || [])
+    } catch (err: any) {
+      console.error('Chat rooms fetch error:', err)
+    } finally {
+      setRoomsLoading(false)
     }
   }
 
@@ -189,6 +220,43 @@ export default function ChatManagementPage() {
       } catch (err) {
         alert('一部のメッセージの削除に失敗しました')
       }
+    }
+  }
+
+  const createChatRoom = async () => {
+    if (!newRoom.title.trim() || !newRoom.slug.trim()) {
+      alert('タイトルとスラッグを入力してください')
+      return
+    }
+
+    try {
+      await adminApi.createChatRoom({
+        title: newRoom.title.trim(),
+        slug: newRoom.slug.trim()
+      })
+      
+      setNewRoom({ title: '', slug: '' })
+      setShowCreateRoom(false)
+      fetchChatRooms()
+      alert('チャットルームが作成されました')
+    } catch (err: any) {
+      console.error('Create chat room error:', err)
+      alert(err.response?.data?.error || 'チャットルームの作成に失敗しました')
+    }
+  }
+
+  const deleteChatRoom = async (roomId: string, roomTitle: string) => {
+    if (!confirm(`「${roomTitle}」チャットルームを削除しますか？\n\n⚠️ このルームの全メッセージも削除されます。この操作は元に戻せません。`)) {
+      return
+    }
+
+    try {
+      await adminApi.deleteChatRoom(roomId)
+      fetchChatRooms()
+      alert('チャットルームが削除されました')
+    } catch (err: any) {
+      console.error('Delete chat room error:', err)
+      alert(err.response?.data?.error || 'チャットルームの削除に失敗しました')
     }
   }
 
@@ -291,6 +359,111 @@ export default function ChatManagementPage() {
                   <p className="text-2xl font-bold text-white">{stats.questionMessages}</p>
                   <p className="text-sm text-gray-400">質問メッセージ</p>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Chat Room Management */}
+      <Card className="bg-gray-900/50 border-gray-800">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-white flex items-center gap-2">
+              <Hash className="w-5 h-5" />
+              チャットルーム管理
+            </CardTitle>
+            <Button
+              onClick={() => setShowCreateRoom(true)}
+              className="bg-gradient-to-r from-green-500 to-green-600 text-white"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              新規作成
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {roomsLoading ? (
+            <div className="text-center py-4">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-2 animate-pulse">
+                <Hash className="w-4 h-4 text-white" />
+              </div>
+              <p className="text-gray-400 text-sm">ルーム一覧を読み込み中...</p>
+            </div>
+          ) : rooms.length === 0 ? (
+            <div className="text-center py-4">
+              <Hash className="w-8 h-8 text-gray-600 mx-auto mb-2" />
+              <p className="text-gray-400 text-sm">チャットルームがありません</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {rooms.map((room) => (
+                <div key={room.id} className="bg-gray-800/50 rounded-lg p-4 flex items-center justify-between">
+                  <div>
+                    <h4 className="text-white font-medium">{room.title}</h4>
+                    <p className="text-sm text-gray-400">/{room.slug}</p>
+                    <p className="text-xs text-gray-500">{room._count.messages} メッセージ</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => deleteChatRoom(room.id, room.title)}
+                    className="text-gray-400 hover:text-red-400"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Create Room Modal */}
+      {showCreateRoom && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="bg-gray-900 border-gray-800 w-full max-w-md mx-4">
+            <CardHeader>
+              <CardTitle className="text-white">新しいチャットルーム</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="room-title" className="text-gray-300">ルームタイトル</Label>
+                <Input
+                  id="room-title"
+                  value={newRoom.title}
+                  onChange={(e) => setNewRoom(prev => ({ ...prev, title: e.target.value }))}
+                  placeholder="例: 初心者向けFX相談"
+                  className="bg-gray-800/50 border-gray-600 text-white"
+                />
+              </div>
+              <div>
+                <Label htmlFor="room-slug" className="text-gray-300">スラッグ (URL用)</Label>
+                <Input
+                  id="room-slug"
+                  value={newRoom.slug}
+                  onChange={(e) => setNewRoom(prev => ({ ...prev, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') }))}
+                  placeholder="例: fx-beginners"
+                  className="bg-gray-800/50 border-gray-600 text-white"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setShowCreateRoom(false)
+                    setNewRoom({ title: '', slug: '' })
+                  }}
+                  className="text-gray-400"
+                >
+                  キャンセル
+                </Button>
+                <Button
+                  onClick={createChatRoom}
+                  className="bg-gradient-to-r from-green-500 to-green-600 text-white"
+                >
+                  作成
+                </Button>
               </div>
             </CardContent>
           </Card>
