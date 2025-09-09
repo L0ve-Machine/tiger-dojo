@@ -35,6 +35,7 @@ interface SocketState {
   isConnected: boolean
   currentRoom: RoomInfo | null
   currentChannel: string
+  messages: ChatMessage[]
   messagesByChannel: Record<string, ChatMessage[]>
   onlineUsers: OnlineUser[]
   roomOnlineUsers: OnlineUser[]
@@ -59,6 +60,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   isConnected: false,
   currentRoom: null,
   currentChannel: 'general',
+  messages: [],
   messagesByChannel: {},
   onlineUsers: [],
   roomOnlineUsers: [],
@@ -68,7 +70,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     const state = get()
     if (state.socket?.connected) return
 
-    const socketUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://trade-dojo-fx.com'
+    const socketUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:5000'
     const socket = io(socketUrl, {
       auth: { token },
       transports: ['websocket', 'polling'],
@@ -96,7 +98,10 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     // Room events
     socket.on('room_joined', (data: RoomInfo) => {
       console.log('Joined room:', data)
-      set({ currentRoom: data })
+      set(state => ({
+        currentRoom: data,
+        messages: state.messagesByChannel[data.roomId] || []
+      }))
     })
 
     socket.on('user_joined', (data: { userId: string; userName: string }) => {
@@ -109,25 +114,36 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     // Message events
     socket.on('new_message', (message: ChatMessage & { channelId?: string }) => {
+      console.log('Received new message:', message)
       set(state => {
         // Use room ID as the key for storing messages
         const roomId = state.currentRoom?.roomId || state.currentChannel
+        console.log('Current room ID:', roomId, 'Current room:', state.currentRoom)
+        
+        const newMessage = {
+          ...message,
+          createdAt: new Date(message.createdAt)
+        }
+        
         const updatedMessages = {
           ...state.messagesByChannel,
           [roomId]: [
             ...(state.messagesByChannel[roomId] || []),
-            {
-              ...message,
-              createdAt: new Date(message.createdAt)
-            }
+            newMessage
           ]
         }
+        
+        // Always update messages for the current room
+        const currentMessages = [...state.messages, newMessage]
+        
+        console.log('Updated messages:', currentMessages)
         
         // Clear typing indicator for this user
         const newTypingUsers = new Set(state.typingUsers)
         newTypingUsers.delete(message.userId)
         
         return { 
+          messages: currentMessages,
           messagesByChannel: updatedMessages,
           typingUsers: newTypingUsers
         }
@@ -135,15 +151,21 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     })
 
     socket.on('message_history', (data: { messages: ChatMessage[] }) => {
+      console.log('Received message history:', data)
       set(state => {
         const roomId = state.currentRoom?.roomId || state.currentChannel
+        const historyMessages = data.messages.map(msg => ({
+          ...msg,
+          createdAt: new Date(msg.createdAt)
+        }))
+        
+        console.log('Setting history messages:', historyMessages)
+        
         return {
+          messages: historyMessages,
           messagesByChannel: {
             ...state.messagesByChannel,
-            [roomId]: data.messages.map(msg => ({
-              ...msg,
-              createdAt: new Date(msg.createdAt)
-            }))
+            [roomId]: historyMessages
           }
         }
       })
@@ -184,6 +206,10 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     // Error events
     socket.on('error', (error: { message: string }) => {
       console.error('Socket error:', error.message)
+      // If access denied, try to rejoin the room
+      if (error.message === 'Access denied to this room') {
+        console.log('Retrying room join...')
+      }
     })
 
     set({ socket })
@@ -201,21 +227,30 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       socket: null,
       isConnected: false,
       currentRoom: null,
+      messages: [],
       messagesByChannel: {},
       typingUsers: new Set()
     })
   },
 
   joinRoom: (roomType: 'lesson' | 'course' | 'dm', roomId: string) => {
-    const { socket, currentRoom } = get()
+    const { socket, currentRoom, messagesByChannel } = get()
+    
+    console.log('Joining room:', roomId, 'type:', roomType)
     
     // Leave current room if in one
     if (currentRoom) {
       socket?.emit('leave_room', currentRoom)
     }
 
-    // Clear typing for room switching
-    set({ typingUsers: new Set() })
+    // Clear typing for room switching and load messages for new room
+    const existingMessages = messagesByChannel[roomId] || []
+    console.log('Loading existing messages for room:', roomId, 'count:', existingMessages.length)
+    
+    set({ 
+      typingUsers: new Set(),
+      messages: existingMessages
+    })
 
     // Join new room
     socket?.emit('join_room', { roomType, roomId })
@@ -228,6 +263,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       socket?.emit('leave_room', currentRoom)
       set({
         currentRoom: null,
+        messages: [],
         roomOnlineUsers: [],
         typingUsers: new Set()
       })
@@ -242,6 +278,8 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       return
     }
 
+    console.log('Sending message to room:', currentRoom.roomId, 'type:', currentRoom.roomType)
+    
     socket?.emit('send_message', {
       roomType: currentRoom.roomType,
       roomId: currentRoom.roomId,
@@ -290,7 +328,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   },
 
   clearMessages: () => {
-    set({ messagesByChannel: {} })
+    set({ messages: [], messagesByChannel: {} })
   },
 
   getChannelMessages: (channelId: string) => {

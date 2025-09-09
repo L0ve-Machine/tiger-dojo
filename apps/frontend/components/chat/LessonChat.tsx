@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useSocketStore } from '@/lib/socket'
 import { Send, MessageCircle, X, Users, AlertCircle } from 'lucide-react'
 import { format } from 'date-fns'
@@ -15,14 +15,24 @@ export function LessonChat({ lessonId, lessonTitle }: LessonChatProps) {
     isConnected,
     currentRoom,
     messages,
+    messagesByChannel,
     roomOnlineUsers,
     typingUsers,
+    connect,
     joinRoom,
     leaveRoom,
     sendMessage,
     startTyping,
     stopTyping
   } = useSocketStore()
+  
+  // Get messages for current lesson
+  const currentMessages = React.useMemo(() => {
+    if (currentRoom?.roomId === lessonId) {
+      return messages
+    }
+    return messagesByChannel[lessonId] || []
+  }, [messages, messagesByChannel, lessonId, currentRoom])
 
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [messageInput, setMessageInput] = useState('')
@@ -37,12 +47,23 @@ export function LessonChat({ lessonId, lessonTitle }: LessonChatProps) {
     if (isChatOpen) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages, isChatOpen])
+  }, [currentMessages, isChatOpen])
 
-  // Join lesson room when chat opens
+  // Connect to socket and join lesson room when chat opens
   useEffect(() => {
-    if (isChatOpen && isConnected) {
-      joinRoom('lesson', lessonId)
+    if (isChatOpen) {
+      // Try to connect if not connected
+      if (!isConnected) {
+        const token = localStorage.getItem('accessToken')
+        if (token) {
+          connect(token)
+        }
+      }
+      
+      // Join room if connected
+      if (isConnected) {
+        joinRoom('lesson', lessonId)
+      }
     }
     
     return () => {
@@ -50,7 +71,7 @@ export function LessonChat({ lessonId, lessonTitle }: LessonChatProps) {
         leaveRoom()
       }
     }
-  }, [isChatOpen, isConnected, lessonId])
+  }, [isChatOpen, isConnected, lessonId, connect, joinRoom, leaveRoom, currentRoom])
 
   // Handle typing indicator
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -107,9 +128,9 @@ export function LessonChat({ lessonId, lessonTitle }: LessonChatProps) {
         ) : (
           <div className="relative">
             <MessageCircle className="w-6 h-6" />
-            {messages && messages.length > 0 && (
+            {currentMessages && currentMessages.length > 0 && (
               <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
-                {messages.length > 99 ? '99+' : messages.length}
+                {currentMessages.length > 99 ? '99+' : currentMessages.length}
               </span>
             )}
           </div>
@@ -147,14 +168,14 @@ export function LessonChat({ lessonId, lessonTitle }: LessonChatProps) {
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {!messages || messages.length === 0 ? (
+            {!currentMessages || currentMessages.length === 0 ? (
               <div className="text-center text-gray-500 mt-8">
                 <MessageCircle className="w-12 h-12 mx-auto mb-3 text-gray-600" />
                 <p className="text-sm">No messages yet</p>
                 <p className="text-xs mt-1">Be the first to ask a question!</p>
               </div>
             ) : (
-              messages?.map((message) => (
+              currentMessages?.map((message) => (
                 <div key={message.id} className="flex gap-2">
                   <div className="w-8 h-8 rounded-full bg-yellow-500 flex items-center justify-center flex-shrink-0">
                     <span className="text-black text-xs font-bold">

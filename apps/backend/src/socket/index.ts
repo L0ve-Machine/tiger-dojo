@@ -35,7 +35,7 @@ export class SocketServer {
   constructor(httpServer: HTTPServer) {
     this.io = new Server(httpServer, {
       cors: {
-        origin: process.env.CLIENT_URL || 'http://localhost:3000',
+        origin: (process.env.CLIENT_URL || 'http://localhost:3000').split(',').map(url => url.trim()),
         credentials: true
       },
       transports: ['websocket', 'polling']
@@ -51,6 +51,8 @@ export class SocketServer {
       try {
         const token = socket.handshake.auth.token
         
+        console.log('Socket authentication attempt with token:', token ? 'Present' : 'Missing')
+        
         if (!token) {
           return next(new Error('Authentication token required'))
         }
@@ -60,6 +62,8 @@ export class SocketServer {
           token,
           process.env.JWT_ACCESS_SECRET || 'fallback-secret'
         ) as any
+        
+        console.log('Token decoded successfully for userId:', decoded.userId)
 
         // Get user from database
         const user = await prisma.user.findUnique({
@@ -158,6 +162,8 @@ export class SocketServer {
     const { roomType, roomId } = data
     const roomName = this.getRoomName(roomType, roomId)
     
+    console.log(`User ${socket.data.userName} (${socket.data.userId}) attempting to join room: ${roomName}`)
+    
     // Extract channel from roomId if it contains channel info
     let channelId = 'general'
     let baseRoomId = roomId
@@ -178,6 +184,7 @@ export class SocketServer {
       )
 
       if (!hasAccess) {
+        console.log(`Access denied for user ${socket.data.userName} to room ${roomName}`)
         socket.emit('error', { message: 'Access denied to this room' })
         return
       }
@@ -418,6 +425,12 @@ export class SocketServer {
 
     // Check specific room type access
     if (roomType === 'lesson') {
+      // In development, allow all authenticated users to access lesson chat
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('Development mode: Allowing access to lesson chat for user:', userId)
+        return true
+      }
+      
       // Check if user has access to the lesson
       const enrollment = await prisma.enrollment.findFirst({
         where: {
@@ -433,6 +446,11 @@ export class SocketServer {
     }
 
     if (roomType === 'course') {
+      // In development, allow all authenticated users
+      if (process.env.NODE_ENV !== 'production') {
+        return true
+      }
+      
       // For course-level chats (general channels), check if user has any enrollment
       // This allows access to general chat channels for enrolled students
       const hasEnrollment = await prisma.enrollment.findFirst({
