@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuthStore } from '@/lib/auth-store'
 import Link from 'next/link'
 import { 
   BarChart3, 
@@ -15,7 +14,8 @@ import {
   X,
   LogOut,
   Home,
-  Upload
+  Upload,
+  UserCheck
 } from 'lucide-react'
 
 interface AdminLayoutProps {
@@ -24,42 +24,28 @@ interface AdminLayoutProps {
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const router = useRouter()
-  const { user, isAuthenticated, logout } = useAuthStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      // Redirect to login with return URL
-      router.push(`/auth/login?returnUrl=${encodeURIComponent(window.location.pathname)}`)
+    // 管理者パスワード認証チェックのみ
+    const adminAccess = sessionStorage.getItem('adminAccess')
+    if (!adminAccess) {
+      router.push(`/admin-login?returnUrl=${encodeURIComponent(window.location.pathname)}`)
       return
     }
-    
-    if (user?.role !== 'ADMIN' && user?.role !== 'INSTRUCTOR') {
-      router.push('/dashboard')
-      return
-    }
-  }, [isAuthenticated, user, router])
+  }, [router])
 
   const handleLogout = () => {
-    logout()
-    router.push('/auth/login')
+    // 管理者アクセス権限をクリア
+    sessionStorage.removeItem('adminAccess')
+    router.push('/admin-login')
   }
 
-  if (!isAuthenticated || (user?.role !== 'ADMIN' && user?.role !== 'INSTRUCTOR')) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-dark-950 to-black flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 bg-gradient-to-br from-gold-400 to-gold-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-            <Settings className="w-6 h-6 text-black" />
-          </div>
-          <p className="text-gray-400">管理画面を読み込み中...</p>
-        </div>
-      </div>
-    )
-  }
+  // 管理者パスワード認証のみを使用するため、ユーザー認証チェックは不要
 
   const menuItems = [
     { icon: BarChart3, label: 'ダッシュボード', href: '/admin', adminOnly: false },
+    { icon: UserCheck, label: '承認待ちユーザー', href: '/admin/pending-users', adminOnly: true },
     { icon: Users, label: 'ユーザー管理', href: '/admin/users', adminOnly: true },
     { icon: BookOpen, label: 'コース管理', href: '/admin/courses', adminOnly: false },
     { icon: Video, label: 'レッスン管理', href: '/admin/lessons', adminOnly: false },
@@ -68,9 +54,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     { icon: Settings, label: 'システム設定', href: '/admin/settings', adminOnly: true },
   ]
 
-  const filteredMenuItems = menuItems.filter(item => 
-    !item.adminOnly || user?.role === 'ADMIN'
-  )
+  // パスワード認証のみのため、全メニューアイテムを表示
+  const filteredMenuItems = menuItems
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-dark-950 to-black">
@@ -93,7 +78,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             <div>
               <h1 className="text-xl font-bold text-white">管理画面</h1>
               <p className="text-sm text-gray-400">
-                {user?.role === 'ADMIN' ? '管理者' : '講師'}
+                管理者モード
               </p>
             </div>
             <button
@@ -130,17 +115,15 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             </div>
           </nav>
 
-          {/* User Info */}
+          {/* Admin Info */}
           <div className="p-4 border-t border-gray-800">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 bg-gradient-to-br from-gold-400 to-gold-600 rounded-full flex items-center justify-center">
-                <span className="text-black font-bold text-sm">
-                  {user?.name?.charAt(0)}
-                </span>
+                <span className="text-black font-bold text-sm">管</span>
               </div>
               <div className="flex-1">
-                <p className="text-sm font-medium text-white">{user?.name}</p>
-                <p className="text-xs text-gray-400">{user?.email}</p>
+                <p className="text-sm font-medium text-white">管理者</p>
+                <p className="text-xs text-gray-400">システム管理</p>
               </div>
             </div>
             <button

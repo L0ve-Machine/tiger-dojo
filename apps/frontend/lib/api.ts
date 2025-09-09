@@ -170,12 +170,19 @@ export const dashboardApi = {
   getLeaderboard: () => api.get('/api/dashboard/leaderboard'),
 }
 
+// Create admin-specific axios instance without user authentication
+const adminApiClient = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000',
+  timeout: 10000,
+  withCredentials: false, // Don't send auth cookies for admin-only endpoints
+})
+
 // Admin API functions
 export const adminApi = {
   // Dashboard & Analytics
-  getDashboard: () => api.get('/api/admin/dashboard'),
+  getDashboard: () => adminApiClient.get('/api/admin/dashboard'),
   getAnalytics: (period?: string) => 
-    api.get('/api/admin/analytics', { params: { period } }),
+    adminApiClient.get('/api/admin/analytics', { params: { period } }),
 
   // User Management
   getUsers: (params?: {
@@ -183,34 +190,36 @@ export const adminApi = {
     limit?: number
     search?: string
     role?: string
-  }) => api.get('/api/admin/users', { params }),
+  }) => adminApiClient.get('/api/admin/users', { params }),
   
-  getUserById: (userId: string) => api.get(`/api/admin/users/${userId}`),
+  getPendingUsers: () => adminApiClient.get('/api/admin/pending-users'),
+  
+  getUserById: (userId: string) => adminApiClient.get(`/api/admin/users/${userId}`),
   
   updateUser: (userId: string, data: {
     name?: string
     email?: string
     role?: string
     isActive?: boolean
-  }) => api.put(`/api/admin/users/${userId}`, data),
+  }) => adminApiClient.put(`/api/admin/users/${userId}`, data),
   
-  deleteUser: (userId: string) => api.delete(`/api/admin/users/${userId}`),
+  deleteUser: (userId: string) => adminApiClient.delete(`/api/admin/users/${userId}`),
   
   updateUserRole: (userId: string, role: string) => 
-    api.put(`/api/admin/users/${userId}/role`, { role }),
+    adminApiClient.put(`/api/admin/users/${userId}/role`, { role }),
   
   updateUserStatus: (userId: string, isActive: boolean) => 
-    api.put(`/api/admin/users/${userId}/status`, { isActive }),
+    adminApiClient.put(`/api/admin/users/${userId}/status`, { isActive }),
 
   // Course Management
-  getAdminCourses: () => api.get('/api/admin/courses'),
+  getAdminCourses: () => adminApiClient.get('/api/admin/courses'),
   createAdminCourse: (data: {
     title: string
     description: string
     slug: string
     thumbnail?: string
     price?: number
-  }) => api.post('/api/admin/courses', data),
+  }) => adminApiClient.post('/api/admin/courses', data),
   
   updateAdminCourse: (courseId: string, data: {
     title?: string
@@ -227,7 +236,7 @@ export const adminApi = {
 
   // Lesson Management
   getAdminLessons: (courseId?: string) => 
-    api.get('/api/admin/lessons', { params: { courseId } }),
+    adminApiClient.get('/api/admin/lessons', { params: { courseId } }),
   
   createAdminLesson: (data: {
     courseId: string
@@ -240,7 +249,7 @@ export const adminApi = {
     releaseDays?: number
     releaseDate?: string
     prerequisiteId?: string
-  }) => api.post('/api/admin/lessons', data),
+  }) => adminApiClient.post('/api/admin/lessons', data),
   
   updateAdminLesson: (lessonId: string, data: any) => 
     api.put(`/api/admin/lessons/${lessonId}`, data),
@@ -249,7 +258,7 @@ export const adminApi = {
 
   // Video Upload (Placeholder)
   uploadVideo: (data: FormData) => 
-    api.post('/api/admin/upload/video', data, {
+    adminApiClient.post('/api/admin/upload/video', data, {
       headers: { 'Content-Type': 'multipart/form-data' }
     }),
   
@@ -261,17 +270,21 @@ export const adminApi = {
     page?: number
     limit?: number
     lessonId?: string
-  }) => api.get('/api/admin/chat/messages', { params }),
+  }) => adminApiClient.get('/api/admin/chat/messages', { params }),
   
   deleteChatMessage: (messageId: string) => 
-    api.delete(`/api/admin/chat/messages/${messageId}`),
+    adminApiClient.delete(`/api/admin/chat/messages/${messageId}`),
   
   moderateMessage: (messageId: string, content: string) => 
-    api.put(`/api/admin/chat/messages/${messageId}/moderate`, { content }),
+    adminApiClient.put(`/api/admin/chat/messages/${messageId}/moderate`, { content }),
 
   // System Settings
-  getSettings: () => api.get('/api/admin/settings'),
-  updateSettings: (data: any) => api.put('/api/admin/settings', data),
+  getSettings: () => adminApiClient.get('/api/admin/settings'),
+  updateSettings: (data: any) => adminApiClient.put('/api/admin/settings', data),
+  
+  // Admin Password Management
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    adminApiClient.post('/api/admin/change-password', data),
 }
 
 // Generic API helper

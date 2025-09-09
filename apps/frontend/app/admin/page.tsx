@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuthStore } from '@/lib/auth-store'
 import { adminApi } from '@/lib/api'
 import { 
   Users, 
@@ -32,7 +31,6 @@ interface DashboardStats {
 }
 
 export default function AdminDashboard() {
-  const { user } = useAuthStore()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
