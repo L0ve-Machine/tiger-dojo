@@ -5,6 +5,8 @@ import { authenticateToken, validateRefreshToken } from '../middleware/auth.midd
 import { InviteService } from '../services/invite.service'
 import { prisma } from '../index'
 import { z } from 'zod'
+import bcrypt from 'bcrypt'
+import { emailService } from '../services/email.service'
 
 const router = Router()
 
@@ -36,33 +38,25 @@ const registerWithInviteSchema = z.object({
     .optional()
     .or(z.literal('')),
   
-  age: z
-    .number()
-    .int('年齢は整数で入力してください')
-    .min(1, '年齢は1以上である必要があります')
-    .max(120, '年齢は120以下である必要があります')
-    .optional(),
-  
-  gender: z
-    .enum(['male', 'female', 'other', 'prefer_not_to_say'], {
-      errorMap: () => ({ message: '有効な性別を選択してください' })
-    })
-    .optional(),
-  
-  tradingExperience: z
-    .enum(['beginner', 'intermediate', 'advanced'], {
-      errorMap: () => ({ message: '有効な取引経験を選択してください' })
-    })
-    .optional(),
-  
   inviteCode: z.string().min(1, '招待コードが必要です')
 })
 
-// POST /api/auth/register - User registration with invite code
+// POST /api/auth/register - Request user registration (pending approval)
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    // Validate request data including invite code
-    const validation = validateRequest(registerWithInviteSchema, req.body)
+    // 招待コード不要の新しいスキーマを使用
+    const simpleRegisterSchema = z.object({
+      email: z.string().email('有効なメールアドレスを入力してください'),
+      password: z.string().min(8, 'パスワードは8文字以上である必要があります'),
+      passwordConfirmation: z.string(),
+      name: z.string().min(1, '名前を入力してください'),
+      discordName: z.string().optional()
+    }).refine(data => data.password === data.passwordConfirmation, {
+      message: 'パスワードが一致しません',
+      path: ['passwordConfirmation']
+    })
+
+    const validation = validateRequest(simpleRegisterSchema, req.body)
     if (!validation.success) {
       return res.status(400).json({
         error: 'Validation failed',
@@ -70,57 +64,56 @@ router.post('/register', async (req: Request, res: Response) => {
       })
     }
 
-    const { passwordConfirmation, agreeToTerms, inviteCode, ...registerData } = validation.data
+    const { passwordConfirmation, ...userData } = validation.data
 
-    // Validate invite code first
-    const inviteValidation = await InviteService.validateInviteCode(inviteCode)
-    if (!inviteValidation.isValid) {
+    // Check if email already exists in User or PendingUser
+    const existingUser = await prisma.user.findUnique({
+      where: { email: userData.email }
+    })
+    if (existingUser) {
       return res.status(400).json({
-        error: inviteValidation.reason
+        error: 'このメールアドレスは既に登録されています'
       })
     }
 
-    // Get client info
-    const ipAddress = req.ip || req.connection.remoteAddress
-    const userAgent = req.get('User-Agent')
+    const existingPending = await prisma.pendingUser.findUnique({
+      where: { email: userData.email }
+    })
+    if (existingPending && existingPending.status === 'PENDING') {
+      return res.status(400).json({
+        error: 'このメールアドレスは既に承認待ちです'
+      })
+    }
 
-    // Register user
-    const result = await AuthService.register(registerData, ipAddress, userAgent)
+    // Hash password
+    const hashedPassword = await bcrypt.hash(userData.password, 10)
 
-    // Use invite link after successful registration
+    // Create pending user
+    const pendingUser = await prisma.pendingUser.create({
+      data: {
+        email: userData.email,
+        password: hashedPassword,
+        name: userData.name,
+        discordName: userData.discordName
+      }
+    })
+
+    // Send approval request email to admin
     try {
-      await InviteService.useInviteLink(inviteCode, result.user.id)
-    } catch (inviteError: any) {
-      console.error('Failed to use invite link after registration:', inviteError)
-      // Continue with registration success, but log the issue
+      await emailService.sendApprovalRequest({
+        id: pendingUser.id,
+        email: pendingUser.email,
+        name: pendingUser.name,
+        approvalToken: pendingUser.approvalToken
+      })
+    } catch (emailError) {
+      console.error('Failed to send approval email:', emailError)
+      // Continue anyway - admin can still approve manually
     }
-
-    // Set HTTP-only cookies for tokens (recommended for security)
-    const cookieOptions = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax' as const,
-      path: '/'
-    }
-
-    res.cookie('accessToken', result.tokens.accessToken, {
-      ...cookieOptions,
-      maxAge: 15 * 60 * 1000 // 15 minutes
-    })
-
-    res.cookie('refreshToken', result.tokens.refreshToken, {
-      ...cookieOptions,
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-    })
 
     res.status(201).json({
-      message: '登録が完了しました',
-      user: result.user,
-      tokens: result.tokens, // Also return in body for frontend flexibility
-      inviteInfo: inviteValidation.invite ? {
-        description: inviteValidation.invite.description,
-        creator: inviteValidation.invite.creator
-      } : null
+      message: 'アカウント登録申請を受け付けました。管理者の承認後、メールでお知らせします。',
+      pending: true
     })
 
   } catch (error: any) {
@@ -367,6 +360,133 @@ router.put('/update-profile', authenticateToken, async (req: Request, res: Respo
     console.error('Update profile error:', error)
     res.status(500).json({
       error: 'プロフィールの更新に失敗しました'
+    })
+  }
+})
+
+// POST /api/auth/approve/:token - Approve pending user
+router.post('/approve/:token', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ADMIN') {
+      return res.status(403).json({
+        error: '管理者権限が必要です'
+      })
+    }
+
+    const { token } = req.params
+    const { approved, rejectionReason } = req.body
+
+    // Find pending user by token
+    const pendingUser = await prisma.pendingUser.findUnique({
+      where: { approvalToken: token }
+    })
+
+    if (!pendingUser) {
+      return res.status(404).json({
+        error: '承認待ちユーザーが見つかりません'
+      })
+    }
+
+    if (pendingUser.status !== 'PENDING') {
+      return res.status(400).json({
+        error: 'このユーザーは既に処理されています'
+      })
+    }
+
+    if (approved) {
+      // Create actual user account
+      const newUser = await prisma.user.create({
+        data: {
+          email: pendingUser.email,
+          password: pendingUser.password,
+          name: pendingUser.name,
+          discordName: pendingUser.discordName,
+          emailVerified: true
+        }
+      })
+
+      // Update pending user status
+      await prisma.pendingUser.update({
+        where: { id: pendingUser.id },
+        data: {
+          status: 'APPROVED',
+          approvedAt: new Date(),
+          approvedBy: req.user.userId
+        }
+      })
+
+      // Send approval notification email
+      try {
+        await emailService.sendApprovalNotification(pendingUser.email, true)
+      } catch (emailError) {
+        console.error('Failed to send approval notification:', emailError)
+      }
+
+      res.json({
+        message: 'ユーザーを承認しました',
+        user: newUser
+      })
+    } else {
+      // Reject the pending user
+      await prisma.pendingUser.update({
+        where: { id: pendingUser.id },
+        data: {
+          status: 'REJECTED',
+          rejectedAt: new Date(),
+          rejectionReason: rejectionReason || '管理者により拒否されました'
+        }
+      })
+
+      // Send rejection notification email
+      try {
+        await emailService.sendApprovalNotification(pendingUser.email, false, rejectionReason)
+      } catch (emailError) {
+        console.error('Failed to send rejection notification:', emailError)
+      }
+
+      res.json({
+        message: 'ユーザー登録を拒否しました'
+      })
+    }
+
+  } catch (error: any) {
+    console.error('Approval error:', error)
+    res.status(500).json({
+      error: '承認処理に失敗しました'
+    })
+  }
+})
+
+// GET /api/auth/pending-users - Get all pending users (admin only)
+router.get('/pending-users', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== 'ADMIN') {
+      return res.status(403).json({
+        error: '管理者権限が必要です'
+      })
+    }
+
+    const pendingUsers = await prisma.pendingUser.findMany({
+      where: { status: 'PENDING' },
+      orderBy: { requestedAt: 'desc' },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        discordName: true,
+        approvalToken: true,
+        requestedAt: true
+      }
+    })
+
+    res.json({
+      pendingUsers
+    })
+
+  } catch (error: any) {
+    console.error('Get pending users error:', error)
+    res.status(500).json({
+      error: '承認待ちユーザーの取得に失敗しました'
     })
   }
 })

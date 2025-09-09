@@ -32,7 +32,7 @@ interface LoadingStates {
 
 export default function ChatPage() {
   const router = useRouter()
-  const { user, isAuthenticated, updateUser } = useAuthStore()
+  const { user, isAuthenticated } = useAuthStore()
   const {
     socket,
     isConnected,
@@ -394,7 +394,6 @@ export default function ChatPage() {
     try {
       const response = await authApi.updateProfile({ name: trimmedName })
       if (response.data.user) {
-        updateUser(response.data.user)
         setShowProfileModal(false)
         setError({ message: '名前を更新しました', type: 'info' })
       }

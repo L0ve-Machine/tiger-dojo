@@ -7,10 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Loader2, Plus, Copy, Eye, ToggleLeft, ToggleRight, Trash2, Users, Link } from 'lucide-react'
-import { useToast } from '@/hooks/use-toast'
 
 interface InviteLink {
   id: string
@@ -51,7 +48,6 @@ interface InviteStats {
 }
 
 export default function InviteManagement() {
-  const { toast } = useToast()
   const [invites, setInvites] = useState<InviteLink[]>([])
   const [stats, setStats] = useState<InviteStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -133,10 +129,7 @@ export default function InviteManagement() {
       const data = await response.json()
 
       if (response.ok) {
-        toast({
-          title: "招待リンク作成完了",
-          description: "新しい招待リンクが作成されました"
-        })
+        console.log('招待リンク作成完了')
         
         // Reset form
         setCreateForm({ maxUses: '', expiresAt: '', description: '' })
@@ -148,23 +141,12 @@ export default function InviteManagement() {
         const inviteUrl = `${window.location.origin}/register?invite=${data.invite.code}`
         navigator.clipboard.writeText(inviteUrl)
         
-        toast({
-          title: "クリップボードにコピーしました",
-          description: "招待URLがクリップボードにコピーされました"
-        })
+        console.log('クリップボードにコピーしました')
       } else {
-        toast({
-          title: "エラー",
-          description: data.error || "招待リンクの作成に失敗しました",
-          variant: "destructive"
-        })
+        console.error(data.error || '招待リンクの作成に失敗しました')
       }
     } catch (error) {
-      toast({
-        title: "エラー",
-        description: "招待リンクの作成中にエラーが発生しました",
-        variant: "destructive"
-      })
+      console.error('招待リンクの作成中にエラーが発生しました')
     } finally {
       setIsCreatingInvite(false)
     }
@@ -182,24 +164,13 @@ export default function InviteManagement() {
       })
 
       if (response.ok) {
-        toast({
-          title: `招待リンク${isActive ? '有効化' : '無効化'}完了`,
-          description: `招待リンクを${isActive ? '有効' : '無効'}にしました`
-        })
+        console.log(`招待リンク${isActive ? '有効化' : '無効化'}完了`)
         fetchInvites()
       } else {
-        toast({
-          title: "エラー",
-          description: "招待リンクの更新に失敗しました",
-          variant: "destructive"
-        })
+        console.error('招待リンクの更新に失敗しました')
       }
     } catch (error) {
-      toast({
-        title: "エラー",
-        description: "招待リンクの更新中にエラーが発生しました",
-        variant: "destructive"
-      })
+      console.error('招待リンクの更新中にエラーが発生しました')
     }
   }
 
@@ -215,35 +186,21 @@ export default function InviteManagement() {
       })
 
       if (response.ok) {
-        toast({
-          title: "削除完了",
-          description: "招待リンクが削除されました"
-        })
+        console.log('削除完了')
         fetchInvites()
         fetchStats()
       } else {
-        toast({
-          title: "エラー",
-          description: "招待リンクの削除に失敗しました",
-          variant: "destructive"
-        })
+        console.error('招待リンクの削除に失敗しました')
       }
     } catch (error) {
-      toast({
-        title: "エラー",
-        description: "招待リンクの削除中にエラーが発生しました",
-        variant: "destructive"
-      })
+      console.error('招待リンクの削除中にエラーが発生しました')
     }
   }
 
   const copyInviteUrl = (code: string) => {
     const inviteUrl = `${window.location.origin}/register?invite=${code}`
     navigator.clipboard.writeText(inviteUrl)
-    toast({
-      title: "コピー完了",
-      description: "招待URLがクリップボードにコピーされました"
-    })
+    console.log('コピー完了')
   }
 
   if (isLoading) {
@@ -354,9 +311,9 @@ export default function InviteManagement() {
         </CardHeader>
         <CardContent className="space-y-4">
           {invites.length === 0 ? (
-            <Alert>
-              <AlertDescription>招待リンクがありません。新しい招待リンクを作成してください。</AlertDescription>
-            </Alert>
+            <div className="bg-yellow-400/10 border border-yellow-400/30 rounded-lg p-4">
+              <p className="text-yellow-400 text-sm">招待リンクがありません。新しい招待リンクを作成してください。</p>
+            </div>
           ) : (
             invites.map((invite) => (
               <div key={invite.id} className="border rounded-lg p-4 space-y-3">

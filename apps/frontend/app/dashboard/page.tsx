@@ -58,7 +58,7 @@ interface LatestLesson {
 
 export default function DashboardPage() {
   const router = useRouter()
-  const { user, isAuthenticated, isLoading, logout, getCurrentUser, updateUser } = useAuthStore()
+  const { user, isAuthenticated, isLoading, logout } = useAuthStore()
   
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false)
   const [statistics, setStatistics] = useState<DashboardStatistics | null>(null)
@@ -72,10 +72,8 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.push('/auth/login')
-    } else if (isAuthenticated && !user) {
-      getCurrentUser()
     }
-  }, [isAuthenticated, isLoading, user, router, getCurrentUser])
+  }, [isAuthenticated, isLoading, router])
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -160,9 +158,6 @@ export default function DashboardPage() {
     setSaveNameLoading(true)
     try {
       const response = await authApi.updateProfile({ name: newName.trim() })
-      if (response.data.user) {
-        updateUser(response.data.user)
-      }
       setEditingName(false)
       setShowSettingsModal(false)
       setNewName('')

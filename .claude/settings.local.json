@@ -80,7 +80,13 @@
       "Read(//root/**)",
       "Bash(env)",
       "Bash(git remote set-url:*)",
-      "Bash(GIT_TERMINAL_PROMPT=0 git push https://github.com/L0ve-Machine/tiger-dojo.git master)"
+      "Bash(GIT_TERMINAL_PROMPT=0 git push https://github.com/L0ve-Machine/tiger-dojo.git master)",
+      "Bash(lsof:*)",
+      "Bash(kill:*)",
+      "Read(//etc/nginx/sites-available/**)",
+      "Bash(npx next build:*)",
+      "Bash(PORT=3010 pm2 start npm --name \"frontend-3010\" -- start)",
+      "Bash(PORT=3010 npm run dev)"
     ],
     "deny": [],
     "ask": []

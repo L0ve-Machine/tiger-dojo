@@ -1,10 +1,10 @@
-import InviteRegistrationForm from '@/components/auth/InviteRegistrationForm'
+import ApprovalRegistrationForm from '@/components/auth/ApprovalRegistrationForm'
 
 export default function RegisterPage() {
-  return <InviteRegistrationForm />
+  return <ApprovalRegistrationForm />
 }
 
 export const metadata = {
   title: 'ユーザー登録 - FX Tiger Dojo',
-  description: '招待コードを使ってFX Tiger Dojoに参加する'
+  description: 'FX Tiger Dojoのアカウント登録'
 }

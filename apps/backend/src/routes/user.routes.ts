@@ -200,9 +200,6 @@ router.get('/profile', authenticateToken, async (req, res) => {
         name: true,
         role: true,
         discordName: true,
-        age: true,
-        gender: true,
-        tradingExperience: true,
         createdAt: true,
         isActive: true,
         emailVerified: true
@@ -226,26 +223,20 @@ router.get('/profile', authenticateToken, async (req, res) => {
 // PUT /api/user/profile - Update user profile
 router.put('/profile', authenticateToken, async (req, res) => {
   try {
-    const { name, discordName, age, gender, tradingExperience } = req.body
+    const { name, discordName } = req.body
 
     const updatedUser = await prisma.user.update({
       where: { id: req.user.userId },
       data: {
         ...(name && { name }),
-        ...(discordName !== undefined && { discordName }),
-        ...(age !== undefined && { age }),
-        ...(gender !== undefined && { gender }),
-        ...(tradingExperience !== undefined && { tradingExperience })
+        ...(discordName !== undefined && { discordName })
       },
       select: {
         id: true,
         email: true,
         name: true,
         role: true,
-        discordName: true,
-        age: true,
-        gender: true,
-        tradingExperience: true
+        discordName: true
       }
     })
 

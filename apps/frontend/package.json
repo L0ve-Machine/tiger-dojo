@@ -13,6 +13,7 @@
     "@hookform/resolvers": "^3.3.0",
     "@vimeo/player": "^2.20.0",
     "axios": "^1.6.0",
+    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.292.0",

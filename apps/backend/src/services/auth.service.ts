@@ -8,9 +8,6 @@ export interface RegisterData {
   password: string
   name: string
   discordName?: string
-  age?: number
-  gender?: 'MALE' | 'FEMALE' | 'OTHER' | 'PREFER_NOT_TO_SAY'
-  tradingExperience?: 'BEGINNER' | 'UNDER_1_YEAR' | 'ONE_TO_THREE' | 'OVER_THREE'
 }
 
 export interface LoginData {
@@ -58,9 +55,6 @@ export class AuthService {
           password: hashedPassword,
           name: data.name.trim(),
           discordName: data.discordName?.trim() || null,
-          age: data.age || null,
-          gender: data.gender || null,
-          tradingExperience: data.tradingExperience || null,
         },
         select: {
           id: true,
@@ -305,9 +299,6 @@ export class AuthService {
           name: true,
           role: true,
           discordName: true,
-          age: true,
-          gender: true,
-          tradingExperience: true,
           isActive: true,
           emailVerified: true,
           registeredAt: true,

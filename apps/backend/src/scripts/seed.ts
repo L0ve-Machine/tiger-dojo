@@ -51,9 +51,6 @@ async function main() {
         password: hashedPassword,
         name: '山田太郎',
         role: 'STUDENT',
-        age: 28,
-        gender: 'MALE',
-        tradingExperience: 'BEGINNER',
         discordName: 'yamada_fx',
         emailVerified: true,
         isActive: true

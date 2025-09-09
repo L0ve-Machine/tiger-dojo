@@ -28,30 +28,6 @@ export const registerSchema = z.object({
     .optional()
     .or(z.literal('')),
   
-  age: z
-    .number()
-    .int('年齢は整数である必要があります')
-    .min(18, '18歳以上である必要があります')
-    .max(120, '有効な年齢を入力してください')
-    .optional(),
-  
-  gender: z
-    .enum(['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY'], {
-      errorMap: () => ({ message: '有効な性別を選択してください' })
-    })
-    .optional(),
-  
-  tradingExperience: z
-    .enum(['BEGINNER', 'UNDER_1_YEAR', 'ONE_TO_THREE', 'OVER_THREE'], {
-      errorMap: () => ({ message: '有効なトレード経験を選択してください' })
-    })
-    .optional(),
-  
-  agreeToTerms: z
-    .boolean()
-    .refine((val) => val === true, {
-      message: '利用規約に同意する必要があります'
-    })
 }).refine((data) => data.password === data.passwordConfirmation, {
   message: 'パスワードが一致しません',
   path: ['passwordConfirmation']
