@@ -35,8 +35,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (email: string, password: string) => {
     try {
       set({ isLoading: true, error: null })
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://trade-dojo-fx.com/api'
-      const response = await fetch(`${apiUrl}/auth/login`, {
+      const response = await fetch(`/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -86,8 +85,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: () => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://trade-dojo-fx.com/api'
-    fetch(`${apiUrl}/auth/logout`, {
+    fetch(`/api/auth/logout`, {
       method: 'POST',
       credentials: 'include',
     })
@@ -106,7 +104,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   checkAuth: async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://trade-dojo-fx.com/api'
       const accessToken = localStorage.getItem('accessToken')
       
       if (!accessToken) {
@@ -119,7 +116,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return
       }
 
-      const response = await fetch(`${apiUrl}/auth/me`, {
+      const response = await fetch(`/api/auth/me`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',

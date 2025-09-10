@@ -95,6 +95,46 @@ router.post('/:id/enroll', authenticateToken, async (req: Request, res: Response
   }
 })
 
+// GET /api/courses/lessons/available - Get user's available lessons with access control
+router.get('/lessons/available', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' })
+    }
+
+    const { courseId } = req.query
+    console.log('🔍 [DEBUG] Get available lessons request:', {
+      userId: req.user.userId,
+      userRole: req.user.role,
+      courseId: courseId,
+      timestamp: new Date().toISOString()
+    })
+    
+    const lessons = await CourseService.getUserAvailableLessons(
+      req.user.userId, 
+      courseId as string
+    )
+    
+    console.log('✅ [DEBUG] Available lessons result:', {
+      userId: req.user.userId,
+      totalLessons: lessons.length,
+      availableLessons: lessons.filter(l => l.userAccess?.isAvailable).length,
+      lockedLessons: lessons.filter(l => !l.userAccess?.isAvailable).length,
+      lessonTypes: lessons.reduce((acc, lesson) => {
+        acc[lesson.releaseType] = (acc[lesson.releaseType] || 0) + 1
+        return acc
+      }, {} as Record<string, number>)
+    })
+    
+    res.json({ lessons })
+  } catch (error: any) {
+    console.error('❌ [DEBUG] Get available lessons error:', error)
+    res.status(500).json({
+      error: '利用可能なレッスンの取得に失敗しました'
+    })
+  }
+})
+
 // GET /api/courses/lessons/:id - Get lesson details
 router.get('/lessons/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
@@ -143,6 +183,28 @@ router.post('/lessons/:id/progress', authenticateToken, async (req: Request, res
     console.error('Update progress error:', error)
     res.status(400).json({
       error: error.message || '進捗更新に失敗しました'
+    })
+  }
+})
+
+// GET /api/courses/lessons - Get user's available lessons
+router.get('/lessons', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' })
+    }
+
+    const { courseId } = req.query
+    const lessons = await CourseService.getUserLessons(
+      req.user.userId, 
+      courseId as string
+    )
+    
+    res.json({ lessons })
+  } catch (error: any) {
+    console.error('Get user lessons error:', error)
+    res.status(500).json({
+      error: 'レッスン取得に失敗しました'
     })
   }
 })

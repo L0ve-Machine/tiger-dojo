@@ -771,6 +771,630 @@ export class CourseService {
     }
   }
 
+  // Get user's lessons (basic list without access control)
+  static async getUserLessons(userId: string, courseId?: string) {
+    try {
+      // First, get courses the user is enrolled in
+      const enrollments = await prisma.enrollment.findMany({
+        where: { userId },
+        include: { course: true }
+      })
+
+      if (enrollments.length === 0) {
+        return []
+      }
+
+      const courseIds = enrollments.map(e => e.course.id)
+      const where = courseId ? 
+        { courseId, course: { id: { in: courseIds } } } :
+        { course: { id: { in: courseIds } } }
+
+      const lessons = await prisma.lesson.findMany({
+        where,
+        include: {
+          course: {
+            select: {
+              id: true,
+              title: true,
+              slug: true
+            }
+          },
+          progress: {
+            where: { userId }
+          }
+        },
+        orderBy: [
+          { course: { title: 'asc' } },
+          { orderIndex: 'asc' }
+        ]
+      })
+
+      return lessons.map(lesson => ({
+        ...lesson,
+        progress: lesson.progress[0] || null
+      }))
+    } catch (error) {
+      console.error('Get user lessons error:', error)
+      throw error
+    }
+  }
+
+  // Get user's available lessons with access control
+  static async getUserAvailableLessons(userId: string, courseId?: string) {
+    try {
+      console.log('🔍 [DEBUG] getUserAvailableLessons called:', { userId, courseId })
+      
+      // Check if user is admin/instructor first
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true }
+      })
+      
+      console.log('🔍 [DEBUG] User found:', user)
+
+      // Admin and instructors have access to all lessons without enrollment
+      if (user && (user.role === 'ADMIN' || user.role === 'INSTRUCTOR')) {
+        const where = courseId ? 
+          { courseId } :
+          { course: { isPublished: true } }
+        
+        const lessons = await prisma.lesson.findMany({
+          where,
+          include: {
+            course: {
+              select: {
+                id: true,
+                title: true,
+                slug: true
+              }
+            },
+            progress: {
+              where: { userId }
+            },
+            prerequisite: {
+              select: {
+                id: true,
+                title: true
+              }
+            }
+          },
+          orderBy: [
+            { course: { title: 'asc' } },
+            { orderIndex: 'asc' }
+          ]
+        })
+
+        return lessons.map((lesson) => ({
+          ...lesson,
+          progress: lesson.progress[0] || null,
+          userAccess: {
+            isAvailable: true, // Admin/instructor always has access
+            daysUntilAvailable: 0,
+            reason: null
+          }
+        }))
+      }
+
+      // For regular users, check enrollments
+      console.log('🔍 [DEBUG] Looking for enrollments for userId:', userId)
+      console.log('🔍 [DEBUG] DATABASE_URL:', process.env.DATABASE_URL)
+      
+      // First let's check if the user exists
+      const userCheck = await prisma.user.findUnique({
+        where: { id: userId }
+      })
+      console.log('🔍 [DEBUG] User exists in DB:', userCheck ? 'YES' : 'NO')
+      
+      // Check all enrollments in the database
+      const allEnrollments = await prisma.enrollment.findMany({
+        include: { course: true, user: { select: { email: true } } }
+      })
+      console.log('🔍 [DEBUG] All enrollments in DB:', allEnrollments)
+      
+      const enrollments = await prisma.enrollment.findMany({
+        where: { userId },
+        include: { course: true }
+      })
+      
+      console.log('🔍 [DEBUG] User enrollments query result:', enrollments)
+      console.log('🔍 [DEBUG] Enrollment count:', enrollments.length)
+
+      if (enrollments.length === 0) {
+        console.log('🔍 [DEBUG] No enrollments found for user')
+        return []
+      }
+
+      const courseIds = enrollments.map(e => e.course.id)
+      const where = courseId ? 
+        { courseId, course: { id: { in: courseIds } } } :
+        { course: { id: { in: courseIds } } }
+
+      console.log('🔍 [DEBUG] Fetching lessons with where clause:', where)
+      
+      const lessons = await prisma.lesson.findMany({
+        where,
+        include: {
+          course: {
+            select: {
+              id: true,
+              title: true,
+              slug: true
+            }
+          },
+          progress: {
+            where: { userId }
+          },
+          prerequisite: {
+            select: {
+              id: true,
+              title: true
+            }
+          }
+        },
+        orderBy: [
+          { course: { title: 'asc' } },
+          { orderIndex: 'asc' }
+        ]
+      })
+      
+      console.log('🔍 [DEBUG] Found lessons:', lessons.length)
+
+      // Check access for each lesson
+      const lessonsWithAccess = await Promise.all(
+        lessons.map(async (lesson) => {
+          const accessCheck = await this.checkLessonAccess(userId, lesson.id)
+          
+          return {
+            ...lesson,
+            progress: lesson.progress[0] || null,
+            userAccess: {
+              isAvailable: accessCheck.hasAccess,
+              daysUntilAvailable: accessCheck.daysUntilAvailable || 0,
+              reason: accessCheck.reason
+            }
+          }
+        })
+      )
+
+      console.log('🔍 [DEBUG] Returning lessons with access:', lessonsWithAccess.length)
+      return lessonsWithAccess
+    } catch (error) {
+      console.error('❌ [DEBUG] Get available lessons error:', error)
+      throw error
+    }
+  }
+
+  // Check lesson access for a specific user and lesson
+  static async checkLessonAccess(userId: string, lessonId: string) {
+    try {
+      console.log(`🔍 [DEBUG] Checking lesson access: userId=${userId}, lessonId=${lessonId}`)
+      
+      const [lesson, adhocAccess] = await Promise.all([
+        prisma.lesson.findUnique({
+          where: { id: lessonId },
+          include: {
+            course: {
+              include: {
+                enrollments: {
+                  where: { userId }
+                }
+              }
+            },
+            prerequisite: {
+              select: {
+                id: true,
+                title: true
+              }
+            }
+          }
+        }),
+        prisma.userLessonAccess.findUnique({
+          where: {
+            userId_lessonId: {
+              userId,
+              lessonId
+            }
+          }
+        })
+      ])
+
+      if (!lesson) {
+        return {
+          hasAccess: false,
+          reason: 'レッスンが見つかりません',
+          daysUntilAvailable: null
+        }
+      }
+
+      // Check for adhoc access first (overrides all other restrictions)
+      if (adhocAccess && adhocAccess.isActive) {
+        const now = new Date()
+        
+        // Check date range
+        if (adhocAccess.startDate <= now && (!adhocAccess.endDate || adhocAccess.endDate >= now)) {
+          return {
+            hasAccess: true,
+            reason: null,
+            daysUntilAvailable: 0
+          }
+        }
+        
+        // If adhoc access is not yet active
+        if (adhocAccess.startDate > now) {
+          const timeDiff = adhocAccess.startDate.getTime() - now.getTime()
+          const daysUntil = Math.ceil(timeDiff / (1000 * 3600 * 24))
+          return {
+            hasAccess: false,
+            reason: `特別アクセス権は${adhocAccess.startDate.toLocaleDateString('ja-JP')}から有効です`,
+            daysUntilAvailable: daysUntil
+          }
+        }
+        
+        // If adhoc access has expired
+        if (adhocAccess.endDate && adhocAccess.endDate < now) {
+          return {
+            hasAccess: false,
+            reason: '特別アクセス権の有効期限が切れています',
+            daysUntilAvailable: null
+          }
+        }
+      }
+
+      // Check if user is enrolled
+      const enrollment = lesson.course.enrollments[0]
+      if (!enrollment) {
+        return {
+          hasAccess: false,
+          reason: 'このコースに登録していません',
+          daysUntilAvailable: null
+        }
+      }
+
+      // Check release conditions
+      const now = new Date()
+      let isReleased = false
+      let reason = ''
+      let daysUntilAvailable: number | null = null
+
+      switch (lesson.releaseType) {
+        case 'IMMEDIATE':
+          isReleased = true
+          break
+
+        case 'SCHEDULED':
+          if (lesson.releaseDate && lesson.releaseDate <= now) {
+            isReleased = true
+          } else if (lesson.releaseDate) {
+            const timeDiff = lesson.releaseDate.getTime() - now.getTime()
+            daysUntilAvailable = Math.ceil(timeDiff / (1000 * 3600 * 24))
+            reason = `このレッスンは ${lesson.releaseDate.toLocaleDateString('ja-JP')} にリリース予定です`
+          }
+          break
+
+        case 'DRIP':
+          if (lesson.releaseDays) {
+            const enrollmentDate = enrollment.enrolledAt
+            const releaseDate = new Date(enrollmentDate.getTime() + (lesson.releaseDays * 24 * 60 * 60 * 1000))
+            if (releaseDate <= now) {
+              isReleased = true
+            } else {
+              const timeDiff = releaseDate.getTime() - now.getTime()
+              daysUntilAvailable = Math.ceil(timeDiff / (1000 * 3600 * 24))
+              reason = `このレッスンは登録から${lesson.releaseDays}日後（${releaseDate.toLocaleDateString('ja-JP')}）にリリースされます`
+            }
+          } else {
+            // Legacy: month-based release
+            const enrollmentDate = enrollment.enrolledAt
+            const lessonIndex = lesson.orderIndex
+            const requiredMonths = Math.floor(lessonIndex / 2)
+            const monthsSinceEnrollment = this.calculateMonthsDifference(enrollmentDate, now)
+            
+            if (monthsSinceEnrollment >= requiredMonths) {
+              isReleased = true
+            } else {
+              const nextReleaseDate = this.addMonthsToDate(enrollmentDate, requiredMonths)
+              const timeDiff = nextReleaseDate.getTime() - now.getTime()
+              daysUntilAvailable = Math.ceil(timeDiff / (1000 * 3600 * 24))
+              reason = `このレッスンは登録から${requiredMonths}ヶ月後（${nextReleaseDate.toLocaleDateString('ja-JP')}）にリリースされます`
+            }
+          }
+          break
+
+        case 'PREREQUISITE':
+          if (lesson.prerequisiteId) {
+            const prerequisiteProgress = await prisma.progress.findUnique({
+              where: {
+                userId_lessonId: {
+                  userId: userId,
+                  lessonId: lesson.prerequisiteId
+                }
+              }
+            })
+            
+            if (prerequisiteProgress?.completed) {
+              isReleased = true
+            } else {
+              reason = `前提レッスン「${lesson.prerequisite?.title}」を完了してください`
+              daysUntilAvailable = null
+            }
+          } else {
+            isReleased = true
+          }
+          break
+
+        default:
+          isReleased = true
+      }
+
+      // Admin users always have access
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true }
+      })
+
+      if (user && (user.role === 'ADMIN' || user.role === 'INSTRUCTOR')) {
+        isReleased = true
+        reason = ''
+        daysUntilAvailable = 0
+      }
+
+      const result = {
+        hasAccess: isReleased,
+        reason: isReleased ? null : reason,
+        daysUntilAvailable: daysUntilAvailable
+      }
+      
+      console.log(`✅ [DEBUG] Lesson access result for ${lesson?.title}:`, {
+        userId,
+        lessonId,
+        releaseType: lesson?.releaseType,
+        userRole: user?.role,
+        enrollment: enrollment ? 'enrolled' : 'not enrolled',
+        result
+      })
+      
+      return result
+    } catch (error) {
+      console.error('Check lesson access error:', error)
+      return {
+        hasAccess: false,
+        reason: 'アクセス権限の確認中にエラーが発生しました',
+        daysUntilAvailable: null
+      }
+    }
+  }
+
+  // Adhoc Access Management
+  static async grantUserLessonAccess(data: {
+    userId: string
+    lessonId: string
+    grantedBy: string
+    reason?: string
+    startDate?: Date
+    endDate?: Date
+  }) {
+    try {
+      // Check if access already exists
+      const existingAccess = await prisma.userLessonAccess.findUnique({
+        where: {
+          userId_lessonId: {
+            userId: data.userId,
+            lessonId: data.lessonId
+          }
+        }
+      })
+
+      if (existingAccess) {
+        // Update existing access
+        const updatedAccess = await prisma.userLessonAccess.update({
+          where: {
+            userId_lessonId: {
+              userId: data.userId,
+              lessonId: data.lessonId
+            }
+          },
+          data: {
+            grantedBy: data.grantedBy,
+            reason: data.reason,
+            startDate: data.startDate || new Date(),
+            endDate: data.endDate,
+            isActive: true
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            },
+            lesson: {
+              select: {
+                id: true,
+                title: true,
+                course: {
+                  select: {
+                    title: true
+                  }
+                }
+              }
+            },
+            granter: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        })
+        
+        return updatedAccess
+      } else {
+        // Create new access
+        const newAccess = await prisma.userLessonAccess.create({
+          data: {
+            userId: data.userId,
+            lessonId: data.lessonId,
+            grantedBy: data.grantedBy,
+            reason: data.reason,
+            startDate: data.startDate || new Date(),
+            endDate: data.endDate,
+            isActive: true
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            },
+            lesson: {
+              select: {
+                id: true,
+                title: true,
+                course: {
+                  select: {
+                    title: true
+                  }
+                }
+              }
+            },
+            granter: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        })
+        
+        return newAccess
+      }
+    } catch (error) {
+      console.error('Grant user lesson access error:', error)
+      throw error
+    }
+  }
+
+  static async revokeUserLessonAccess(userId: string, lessonId: string) {
+    try {
+      await prisma.userLessonAccess.delete({
+        where: {
+          userId_lessonId: {
+            userId,
+            lessonId
+          }
+        }
+      })
+    } catch (error) {
+      console.error('Revoke user lesson access error:', error)
+      throw error
+    }
+  }
+
+  static async bulkGrantLessonAccess(data: {
+    userIds: string[]
+    lessonId: string
+    grantedBy: string
+    reason?: string
+    startDate?: Date
+    endDate?: Date
+  }) {
+    try {
+      const results = []
+      
+      for (const userId of data.userIds) {
+        const access = await this.grantUserLessonAccess({
+          userId,
+          lessonId: data.lessonId,
+          grantedBy: data.grantedBy,
+          reason: data.reason,
+          startDate: data.startDate,
+          endDate: data.endDate
+        })
+        results.push(access)
+      }
+      
+      return results
+    } catch (error) {
+      console.error('Bulk grant lesson access error:', error)
+      throw error
+    }
+  }
+
+  static async getUserAdhocAccess(userId: string) {
+    try {
+      const accesses = await prisma.userLessonAccess.findMany({
+        where: { 
+          userId,
+          isActive: true
+        },
+        include: {
+          lesson: {
+            select: {
+              id: true,
+              title: true,
+              course: {
+                select: {
+                  title: true
+                }
+              }
+            }
+          },
+          granter: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      })
+      
+      return accesses
+    } catch (error) {
+      console.error('Get user adhoc access error:', error)
+      throw error
+    }
+  }
+
+  static async getLessonAdhocUsers(lessonId: string) {
+    try {
+      const accesses = await prisma.userLessonAccess.findMany({
+        where: { 
+          lessonId,
+          isActive: true
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          },
+          granter: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      })
+      
+      return accesses
+    } catch (error) {
+      console.error('Get lesson adhoc users error:', error)
+      throw error
+    }
+  }
+
   // 統計情報
   static async getCourseStats(courseId: string) {
     try {
