@@ -44,6 +44,8 @@ const registerWithInviteSchema = z.object({
 // POST /api/auth/register - Request user registration (pending approval)
 router.post('/register', async (req: Request, res: Response) => {
   try {
+    console.log('Registration request body:', JSON.stringify(req.body, null, 2))
+    
     // 招待コード不要の新しいスキーマを使用
     const simpleRegisterSchema = z.object({
       email: z.string().email('有効なメールアドレスを入力してください'),

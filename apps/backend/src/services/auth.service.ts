@@ -140,14 +140,14 @@ export class AuthService {
         role: user.role
       })
 
-      // Clean up old sessions (optional: keep only last 5 sessions)
+      // Clean up old sessions (optional: keep only last 50 sessions)
       const existingSessions = await prisma.session.findMany({
         where: { userId: user.id },
         orderBy: { createdAt: 'desc' }
       })
 
-      if (existingSessions.length >= 5) {
-        const sessionsToDelete = existingSessions.slice(4)
+      if (existingSessions.length >= 50) {
+        const sessionsToDelete = existingSessions.slice(49)
         await prisma.session.deleteMany({
           where: {
             id: { in: sessionsToDelete.map(s => s.id) }

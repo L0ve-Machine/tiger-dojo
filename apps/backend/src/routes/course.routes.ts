@@ -25,7 +25,7 @@ const createLessonSchema = z.object({
   videoUrl: z.string().min(1, '動画URLを入力してください'),
   duration: z.number().int().min(0).optional(),
   orderIndex: z.number().int().min(0),
-  releaseType: z.enum(['IMMEDIATE', 'SCHEDULED', 'DRIP', 'PREREQUISITE']).optional(),
+  releaseType: z.enum(['IMMEDIATE', 'SCHEDULED', 'DRIP', 'PREREQUISITE', 'HIDDEN']).optional(),
   releaseDays: z.number().int().min(0).optional(),
   releaseDate: z.string().datetime().optional(),
   prerequisiteId: z.string().cuid().optional()

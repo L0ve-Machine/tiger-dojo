@@ -216,14 +216,135 @@ export class AdminController {
     try {
       const { id } = req.params
 
-      await prisma.user.delete({
-        where: { id }
+      // First, check if user exists
+      const userToDelete = await prisma.user.findUnique({
+        where: { id },
+        include: {
+          _count: {
+            select: {
+              enrollments: true,
+              progress: true,
+              messages: true,
+              sessions: true,
+              payments: true,
+              subscriptions: true,
+              lessonAccess: true,
+              grantedAccess: true
+            }
+          }
+        }
       })
 
-      res.json({ message: 'User deleted successfully' })
-    } catch (error) {
+      if (!userToDelete) {
+        return res.status(404).json({ error: 'ユーザーが見つかりません' })
+      }
+
+      // Check if this is the only admin user
+      if (userToDelete.role === 'ADMIN') {
+        const adminCount = await prisma.user.count({
+          where: { role: 'ADMIN' }
+        })
+        
+        if (adminCount <= 1) {
+          return res.status(400).json({ 
+            error: '最後の管理者アカウントは削除できません' 
+          })
+        }
+      }
+
+      console.log(`🗑️ Deleting user ${userToDelete.email} with related data:`, userToDelete._count)
+
+      // Delete related data in proper order to avoid foreign key constraints
+      await prisma.$transaction(async (tx) => {
+        // Delete user's granted access records (if table exists)
+        try {
+          console.log('Deleting granted access records...')
+          await tx.userLessonAccess.deleteMany({
+            where: { grantedBy: id }
+          })
+        } catch (error) {
+          console.log('UserLessonAccess table might not exist, skipping...')
+        }
+
+        // Delete lesson access records for this user (if table exists)
+        try {
+          console.log('Deleting user lesson access records...')
+          await tx.userLessonAccess.deleteMany({
+            where: { userId: id }
+          })
+        } catch (error) {
+          console.log('UserLessonAccess table might not exist, skipping...')
+        }
+
+        // Delete progress records
+        await tx.progress.deleteMany({
+          where: { userId: id }
+        })
+
+        // Delete chat messages
+        await tx.chatMessage.deleteMany({
+          where: { userId: id }
+        })
+
+        // Delete sessions
+        await tx.session.deleteMany({
+          where: { userId: id }
+        })
+
+        // Delete payments
+        await tx.payment.deleteMany({
+          where: { userId: id }
+        })
+
+        // Delete subscriptions
+        await tx.subscription.deleteMany({
+          where: { userId: id }
+        })
+
+        // Delete enrollments
+        await tx.enrollment.deleteMany({
+          where: { userId: id }
+        })
+
+        // Delete invite links created by this user
+        await tx.inviteLink.deleteMany({
+          where: { createdBy: id }
+        })
+
+        // Delete user registrations
+        await tx.registration.deleteMany({
+          where: { userId: id }
+        })
+
+        // Finally, delete the user
+        await tx.user.delete({
+          where: { id }
+        })
+      })
+
+      console.log(`✅ Successfully deleted user ${userToDelete.email}`)
+      res.json({ 
+        message: 'ユーザーとすべての関連データが削除されました',
+        deletedUser: {
+          id: userToDelete.id,
+          email: userToDelete.email,
+          name: userToDelete.name
+        }
+      })
+    } catch (error: any) {
       console.error('Delete user error:', error)
-      res.status(500).json({ error: 'Failed to delete user' })
+      
+      if (error.code === 'P2003') {
+        res.status(400).json({ 
+          error: '関連データが存在するため削除できません。管理者にお問い合わせください。' 
+        })
+      } else if (error.code === 'P2025') {
+        res.status(404).json({ error: 'ユーザーが見つかりません' })
+      } else {
+        res.status(500).json({ 
+          error: 'ユーザーの削除に失敗しました: ' + (error.message || '不明なエラー')
+        })
+      }
     }
   }
 
@@ -431,20 +552,69 @@ export class AdminController {
       const { id } = req.params
       const updateData = { ...req.body }
 
-      if (updateData.duration) updateData.duration = Number(updateData.duration)
-      if (updateData.orderIndex) updateData.orderIndex = Number(updateData.orderIndex)
-      if (updateData.releaseDays) updateData.releaseDays = Number(updateData.releaseDays)
-      if (updateData.releaseDate) updateData.releaseDate = new Date(updateData.releaseDate)
+      console.log('Updating lesson with ID:', id)
+      console.log('Update data received:', updateData)
+
+      // courseIdは更新できないので除去
+      delete updateData.courseId
+      
+      // 無効なフィールドを除去（Prismaスキーマに存在しないフィールド）
+      delete updateData.vimeoEmbedCode
+      
+      // 有効なLessonフィールドのみを許可
+      const validFields = [
+        'title', 'description', 'videoUrl', 'thumbnail', 'duration', 'orderIndex',
+        'releaseType', 'releaseDays', 'releaseDate', 'prerequisiteId'
+      ]
+      
+      // updateDataから有効なフィールドのみを抽出
+      const filteredUpdateData: any = {}
+      for (const field of validFields) {
+        if (updateData.hasOwnProperty(field)) {
+          filteredUpdateData[field] = updateData[field]
+        }
+      }
+
+      // 型変換とバリデーション
+      if (filteredUpdateData.duration) filteredUpdateData.duration = Number(filteredUpdateData.duration)
+      if (filteredUpdateData.orderIndex) filteredUpdateData.orderIndex = Number(filteredUpdateData.orderIndex)
+      if (filteredUpdateData.releaseDays !== null && filteredUpdateData.releaseDays !== undefined) {
+        filteredUpdateData.releaseDays = filteredUpdateData.releaseDays === null ? null : Number(filteredUpdateData.releaseDays)
+      }
+      if (filteredUpdateData.releaseDate !== null && filteredUpdateData.releaseDate !== undefined) {
+        filteredUpdateData.releaseDate = filteredUpdateData.releaseDate === null ? null : new Date(filteredUpdateData.releaseDate)
+      }
+
+      console.log('Filtered update data:', filteredUpdateData)
 
       const lesson = await prisma.lesson.update({
         where: { id },
-        data: updateData
+        data: filteredUpdateData,
+        include: {
+          course: {
+            select: {
+              id: true,
+              title: true,
+              slug: true
+            }
+          },
+          _count: {
+            select: {
+              progress: true,
+              resources: true
+            }
+          }
+        }
       })
 
+      console.log('Lesson updated successfully:', lesson.id)
       res.json({ lesson })
     } catch (error) {
       console.error('Update lesson error:', error)
-      res.status(500).json({ error: 'Failed to update lesson' })
+      res.status(500).json({ 
+        error: 'Failed to update lesson',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      })
     }
   }
 

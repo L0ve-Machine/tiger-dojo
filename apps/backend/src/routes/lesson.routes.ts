@@ -27,6 +27,61 @@ function addMonthsToDate(date: Date, months: number): Date {
 
 const router = express.Router()
 
+// Get all lessons for authenticated user
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user
+    
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication required' })
+    }
+
+    // Get user's enrolled courses
+    const userEnrollments = await prisma.enrollment.findMany({
+      where: { userId: user.id },
+      include: {
+        course: {
+          include: {
+            lessons: {
+              orderBy: { orderIndex: 'asc' },
+              include: {
+                progress: {
+                  where: { userId: user.id }
+                }
+              }
+            }
+          }
+        }
+      }
+    })
+
+    // Flatten lessons from all enrolled courses
+    const lessons = userEnrollments
+      .flatMap(enrollment => enrollment.course.lessons)
+      .map(lesson => ({
+        id: lesson.id,
+        title: lesson.title,
+        description: lesson.description,
+        videoUrl: lesson.videoUrl,
+        thumbnail: lesson.thumbnail,
+        duration: lesson.duration,
+        orderIndex: lesson.orderIndex,
+        releaseType: lesson.releaseType,
+        releaseDays: lesson.releaseDays,
+        releaseDate: lesson.releaseDate,
+        prerequisiteId: lesson.prerequisiteId,
+        createdAt: lesson.createdAt,
+        updatedAt: lesson.updatedAt,
+        progress: lesson.progress[0] || null
+      }))
+
+    res.json({ lessons })
+  } catch (error: any) {
+    console.error('Get lessons error:', error)
+    res.status(500).json({ error: 'レッスンの取得に失敗しました' })
+  }
+})
+
 // Check lesson access for DRM protected content
 router.get('/:lessonId/access', authenticateToken, async (req, res) => {
   try {

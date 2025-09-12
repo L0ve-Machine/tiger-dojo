@@ -18,7 +18,7 @@ export interface LessonData {
   thumbnail?: string
   duration?: number
   orderIndex: number
-  releaseType?: 'IMMEDIATE' | 'SCHEDULED' | 'DRIP' | 'PREREQUISITE'
+  releaseType?: 'IMMEDIATE' | 'SCHEDULED' | 'DRIP' | 'PREREQUISITE' | 'HIDDEN'
   releaseDays?: number
   releaseDate?: Date
   prerequisiteId?: string
@@ -832,52 +832,10 @@ export class CourseService {
       
       console.log('🔍 [DEBUG] User found:', user)
 
-      // Admin and instructors have access to all lessons without enrollment
-      if (user && (user.role === 'ADMIN' || user.role === 'INSTRUCTOR')) {
-        const where = courseId ? 
-          { courseId } :
-          { course: { isPublished: true } }
-        
-        const lessons = await prisma.lesson.findMany({
-          where,
-          include: {
-            course: {
-              select: {
-                id: true,
-                title: true,
-                slug: true
-              }
-            },
-            progress: {
-              where: { userId }
-            },
-            prerequisite: {
-              select: {
-                id: true,
-                title: true
-              }
-            }
-          },
-          orderBy: [
-            { course: { title: 'asc' } },
-            { orderIndex: 'asc' }
-          ]
-        })
+      // All users now follow the same access control rules (no special admin privileges)
 
-        return lessons.map((lesson) => ({
-          ...lesson,
-          progress: lesson.progress[0] || null,
-          userAccess: {
-            isAvailable: true, // Admin/instructor always has access
-            daysUntilAvailable: 0,
-            reason: null
-          }
-        }))
-      }
-
-      // For regular users, check enrollments
-      console.log('🔍 [DEBUG] Looking for enrollments for userId:', userId)
-      console.log('🔍 [DEBUG] DATABASE_URL:', process.env.DATABASE_URL)
+      // For regular users, get all available lessons (no enrollment required)
+      console.log('🔍 [DEBUG] Getting all lessons for user:', userId)
       
       // First let's check if the user exists
       const userCheck = await prisma.user.findUnique({
@@ -885,29 +843,10 @@ export class CourseService {
       })
       console.log('🔍 [DEBUG] User exists in DB:', userCheck ? 'YES' : 'NO')
       
-      // Check all enrollments in the database
-      const allEnrollments = await prisma.enrollment.findMany({
-        include: { course: true, user: { select: { email: true } } }
-      })
-      console.log('🔍 [DEBUG] All enrollments in DB:', allEnrollments)
-      
-      const enrollments = await prisma.enrollment.findMany({
-        where: { userId },
-        include: { course: true }
-      })
-      
-      console.log('🔍 [DEBUG] User enrollments query result:', enrollments)
-      console.log('🔍 [DEBUG] Enrollment count:', enrollments.length)
-
-      if (enrollments.length === 0) {
-        console.log('🔍 [DEBUG] No enrollments found for user')
-        return []
-      }
-
-      const courseIds = enrollments.map(e => e.course.id)
+      // Get all published lessons without enrollment requirement
       const where = courseId ? 
-        { courseId, course: { id: { in: courseIds } } } :
-        { course: { id: { in: courseIds } } }
+        { courseId } :
+        { course: { isPublished: true } }
 
       console.log('🔍 [DEBUG] Fetching lessons with where clause:', where)
       
@@ -974,10 +913,10 @@ export class CourseService {
           where: { id: lessonId },
           include: {
             course: {
-              include: {
-                enrollments: {
-                  where: { userId }
-                }
+              select: {
+                id: true,
+                title: true,
+                isPublished: true
               }
             },
             prerequisite: {
@@ -1040,12 +979,11 @@ export class CourseService {
         }
       }
 
-      // Check if user is enrolled
-      const enrollment = lesson.course.enrollments[0]
-      if (!enrollment) {
+      // Check if course is published
+      if (!lesson.course.isPublished) {
         return {
           hasAccess: false,
-          reason: 'このコースに登録していません',
+          reason: 'このコースは現在公開されていません',
           daysUntilAvailable: null
         }
       }
@@ -1061,6 +999,12 @@ export class CourseService {
           isReleased = true
           break
 
+        case 'HIDDEN':
+          isReleased = false
+          reason = 'このレッスンは現在非公開です'
+          daysUntilAvailable = null
+          break
+
         case 'SCHEDULED':
           if (lesson.releaseDate && lesson.releaseDate <= now) {
             isReleased = true
@@ -1072,31 +1016,51 @@ export class CourseService {
           break
 
         case 'DRIP':
-          if (lesson.releaseDays) {
-            const enrollmentDate = enrollment.enrolledAt
-            const releaseDate = new Date(enrollmentDate.getTime() + (lesson.releaseDays * 24 * 60 * 60 * 1000))
+          // Get user registration date
+          const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { createdAt: true }
+          })
+          
+          if (lesson.releaseDays && user) {
+            const userRegistrationDate = user.createdAt
+            const releaseDate = new Date(userRegistrationDate.getTime() + (lesson.releaseDays * 24 * 60 * 60 * 1000))
+            console.log(`🔍 [DEBUG] DRIP access check:`, {
+              userId,
+              lessonTitle: lesson.title,
+              userRegistrationDate: userRegistrationDate.toISOString(),
+              releaseDays: lesson.releaseDays,
+              releaseDate: releaseDate.toISOString(),
+              now: now.toISOString(),
+              isAfterReleaseDate: releaseDate <= now
+            })
+            
             if (releaseDate <= now) {
               isReleased = true
             } else {
               const timeDiff = releaseDate.getTime() - now.getTime()
               daysUntilAvailable = Math.ceil(timeDiff / (1000 * 3600 * 24))
-              reason = `このレッスンは登録から${lesson.releaseDays}日後（${releaseDate.toLocaleDateString('ja-JP')}）にリリースされます`
+              reason = `このレッスンはユーザー登録から${lesson.releaseDays}日後（${releaseDate.toLocaleDateString('ja-JP')}）にリリースされます`
             }
-          } else {
-            // Legacy: month-based release
-            const enrollmentDate = enrollment.enrolledAt
+          } else if (user) {
+            // Legacy: month-based release using user registration date
+            const userRegistrationDate = user.createdAt
             const lessonIndex = lesson.orderIndex
             const requiredMonths = Math.floor(lessonIndex / 2)
-            const monthsSinceEnrollment = this.calculateMonthsDifference(enrollmentDate, now)
+            const monthsSinceRegistration = this.calculateMonthsDifference(userRegistrationDate, now)
             
-            if (monthsSinceEnrollment >= requiredMonths) {
+            if (monthsSinceRegistration >= requiredMonths) {
               isReleased = true
             } else {
-              const nextReleaseDate = this.addMonthsToDate(enrollmentDate, requiredMonths)
+              const nextReleaseDate = this.addMonthsToDate(userRegistrationDate, requiredMonths)
               const timeDiff = nextReleaseDate.getTime() - now.getTime()
               daysUntilAvailable = Math.ceil(timeDiff / (1000 * 3600 * 24))
-              reason = `このレッスンは登録から${requiredMonths}ヶ月後（${nextReleaseDate.toLocaleDateString('ja-JP')}）にリリースされます`
+              reason = `このレッスンはユーザー登録から${requiredMonths}ヶ月後（${nextReleaseDate.toLocaleDateString('ja-JP')}）にリリースされます`
             }
+          } else {
+            // User not found, deny access
+            isReleased = false
+            reason = 'ユーザー情報が見つかりません'
           }
           break
 
@@ -1126,17 +1090,8 @@ export class CourseService {
           isReleased = true
       }
 
-      // Admin users always have access
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { role: true }
-      })
-
-      if (user && (user.role === 'ADMIN' || user.role === 'INSTRUCTOR')) {
-        isReleased = true
-        reason = ''
-        daysUntilAvailable = 0
-      }
+      // Admin users do NOT bypass access control anymore
+      // All users follow the same rules
 
       const result = {
         hasAccess: isReleased,
@@ -1148,8 +1103,7 @@ export class CourseService {
         userId,
         lessonId,
         releaseType: lesson?.releaseType,
-        userRole: user?.role,
-        enrollment: enrollment ? 'enrolled' : 'not enrolled',
+        coursePublished: lesson?.course?.isPublished,
         result
       })
       

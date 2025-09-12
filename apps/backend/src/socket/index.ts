@@ -11,19 +11,19 @@ interface SocketData {
 }
 
 interface JoinRoomData {
-  roomType: 'lesson' | 'course' | 'dm'
+  roomType: 'lesson' | 'course' | 'dm' | 'private'
   roomId: string
 }
 
 interface SendMessageData {
-  roomType: 'lesson' | 'course' | 'dm'
+  roomType: 'lesson' | 'course' | 'dm' | 'private'
   roomId: string
   content: string
   type?: 'TEXT' | 'QUESTION' | 'ANSWER' | 'ANNOUNCEMENT'
 }
 
 interface TypingData {
-  roomType: 'lesson' | 'course' | 'dm'
+  roomType: 'lesson' | 'course' | 'dm' | 'private'
   roomId: string
 }
 
@@ -274,11 +274,12 @@ export class SocketServer {
         return
       }
 
-      // Save message to database with channel/DM info
+      // Save message to database with channel/DM/private room info
       const message = await this.saveMessage({
         userId: socket.data.userId,
         lessonId: roomType === 'lesson' ? baseRoomId : null,
         courseId: roomType === 'course' ? baseRoomId : null,
+        privateRoomId: roomType === 'private' ? baseRoomId : null,
         content,
         type,
         channelId: roomType === 'dm' ? undefined : channelId,
@@ -464,6 +465,11 @@ export class SocketServer {
       return true
     }
 
+    // Private rooms - allow all authenticated users (password authentication handled at frontend)
+    if (roomType === 'private') {
+      return true
+    }
+
     return false
   }
 
@@ -471,6 +477,7 @@ export class SocketServer {
     userId: string
     lessonId?: string | null
     courseId?: string | null
+    privateRoomId?: string | null
     content: string
     type: string
     channelId?: string
@@ -481,6 +488,7 @@ export class SocketServer {
         userId: data.userId,
         lessonId: data.lessonId,
         courseId: data.courseId,
+        privateRoomId: data.privateRoomId,
         content: data.content,
         type: data.type as any,
         channelId: data.channelId || 'general',
@@ -563,6 +571,37 @@ export class SocketServer {
       const messages = await prisma.chatMessage.findMany({
         where: { 
           courseId: roomId,
+          channelId: channelId
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              role: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit
+      })
+
+      return messages.reverse().map(msg => ({
+        id: msg.id,
+        userId: msg.user.id,
+        userName: msg.user.name,
+        userRole: msg.user.role,
+        content: msg.content,
+        type: msg.type,
+        createdAt: msg.createdAt,
+        isEdited: msg.isEdited
+      }))
+    }
+
+    if (roomType === 'private') {
+      const messages = await prisma.chatMessage.findMany({
+        where: { 
+          privateRoomId: roomId,
           channelId: channelId
         },
         include: {

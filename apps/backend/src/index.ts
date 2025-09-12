@@ -17,6 +17,8 @@ import lessonRoutes from './routes/lesson.routes'
 import subscriptionRoutes from './routes/subscription.routes'
 import userRoutes from './routes/user.routes'
 import dashboardRoutes from './routes/dashboard.routes'
+import vimeoRoutes from './routes/vimeo.routes'
+import privateRoomRoutes from './routes/private-room.routes'
 
 dotenv.config()
 
@@ -27,12 +29,16 @@ const PORT = process.env.PORT || 5010
 export const prisma = new PrismaClient()
 
 // Middleware
+app.set('trust proxy', true) // Enable trust proxy for nginx reverse proxy
 app.use(helmet())
 app.use(cors({
   origin: (process.env.CLIENT_URL || 'http://localhost:3000').split(',').map(url => url.trim()),
   credentials: true,
 }))
-app.use(express.json({ limit: '10mb' }))
+app.use(express.json({ 
+  limit: '10mb',
+  type: 'application/json'
+}))
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
 
@@ -40,7 +46,7 @@ app.use(cookieParser())
 const limiter = process.env.NODE_ENV === 'production'
   ? rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 100, // Limit each IP to 100 requests per windowMs
+      max: 1000, // Increased to 1000 requests per windowMs
       message: {
         error: 'Too many requests from this IP, please try again later.'
       }
@@ -55,7 +61,7 @@ if (process.env.NODE_ENV === 'production') {
 const authLimiter = process.env.NODE_ENV === 'production' 
   ? rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 5, // 5 attempts per 15 minutes in production
+      max: 10000, // Increased to 10000 attempts per 15 minutes in production
       message: {
         error: 'Too many authentication attempts, please try again later.'
       },
@@ -75,6 +81,8 @@ app.use('/api/progress', lessonRoutes) // Legacy route for progress endpoints
 app.use('/api/subscriptions', subscriptionRoutes)
 app.use('/api/user', userRoutes)
 app.use('/api/dashboard', dashboardRoutes)
+app.use('/api/vimeo', vimeoRoutes)
+app.use('/api/private-rooms', privateRoomRoutes)
 
 // Health check
 app.get('/health', (req, res) => {
@@ -89,6 +97,7 @@ app.get('/health', (req, res) => {
 app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' })
 })
+
 
 // Error handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -129,7 +138,7 @@ const socketServer = new SocketServer(httpServer)
 // Export socket server for use in other modules
 export const io = socketServer.getIO()
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server is running on port ${PORT}`)
   console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`)
   console.log(`🌐 CORS enabled for: ${process.env.CLIENT_URL || 'http://localhost:3000'}`)

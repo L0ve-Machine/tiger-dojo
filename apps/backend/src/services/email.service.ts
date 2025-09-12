@@ -47,7 +47,7 @@ class EmailService {
     approvalToken: string;
   }): Promise<void> {
     const adminEmail = process.env.ADMIN_EMAIL || 'admin@fx-tiger-dojo.com';
-    const approvalUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/admin/approve/${pendingUser.approvalToken}`;
+    const approvalUrl = `${process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/admin/approve/${pendingUser.approvalToken}`;
     
     const html = `
       <!DOCTYPE html>
@@ -131,7 +131,7 @@ class EmailService {
               <p>以下のボタンからログインして、学習を開始してください。</p>
               
               <div style="text-align: center;">
-                <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/login" class="button">ログイン画面へ</a>
+                <a href="${process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/login" class="button">ログイン画面へ</a>
               </div>
               
               <p>ご不明な点がございましたら、お気軽にお問い合わせください。</p>

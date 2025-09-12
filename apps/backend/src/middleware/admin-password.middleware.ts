@@ -1,4 +1,6 @@
 import express from 'express'
+import fs from 'fs'
+import path from 'path'
 
 export const verifyAdminPassword = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   // For password-only admin authentication, we'll verify via a header or session
@@ -8,7 +10,17 @@ export const verifyAdminPassword = (req: express.Request, res: express.Response,
   // For now, we'll verify the admin password is sent in the request
   // In a real implementation, you might want to use JWT or session tokens
   const adminPassword = req.headers['x-admin-password']
-  const expectedPassword = process.env.ADMIN_ACCESS_PASSWORD || 'tiger-dojo'
+  
+  // Get current password from file or environment
+  const getCurrentAdminPassword = (): string => {
+    const passwordFilePath = path.join(process.cwd(), '.admin-password')
+    if (fs.existsSync(passwordFilePath)) {
+      return fs.readFileSync(passwordFilePath, 'utf8').trim()
+    }
+    return process.env.ADMIN_ACCESS_PASSWORD || 'tiger-dojo'
+  }
+  
+  const expectedPassword = getCurrentAdminPassword()
   
   if (adminPassword === expectedPassword) {
     next()

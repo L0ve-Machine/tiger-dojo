@@ -3,6 +3,8 @@ import { authenticateToken } from '../middleware/auth.middleware'
 import { requireAdmin, requireInstructorOrAdmin } from '../middleware/admin.middleware'
 import { AdminController } from '../controllers/admin.controller'
 import { z } from 'zod'
+import fs from 'fs'
+import path from 'path'
 
 const router = express.Router()
 
@@ -24,13 +26,77 @@ router.post('/verify-password', async (req: express.Request, res: express.Respon
     }
 
     const { password } = validation.data
-    const adminPassword = process.env.ADMIN_ACCESS_PASSWORD || 'tiger-dojo'
+    
+    // Get current password from file or environment
+    const getCurrentAdminPassword = (): string => {
+      const passwordFilePath = path.join(process.cwd(), '.admin-password')
+      if (fs.existsSync(passwordFilePath)) {
+        return fs.readFileSync(passwordFilePath, 'utf8').trim()
+      }
+      return process.env.ADMIN_ACCESS_PASSWORD || 'tiger-dojo'
+    }
+    
+    const adminPassword = getCurrentAdminPassword()
 
     if (password === adminPassword) {
+      try {
+        // Find admin user and generate JWT tokens
+        const { prisma } = await import('../index')
+        const { generateTokens } = await import('../utils/jwt.utils')
+        
+        console.log('Looking for admin user...')
+        const adminUser = await prisma.user.findFirst({
+          where: { 
+            role: 'ADMIN',
+            isActive: true 
+          }
+        })
+
+        console.log('Admin user found:', adminUser?.email)
+
+        if (!adminUser) {
+          return res.status(500).json({
+            error: '管理者ユーザーが見つかりません'
+          })
+        }
+
+        console.log('Generating tokens...')
+        // Generate tokens
+        const { accessToken, refreshToken } = generateTokens({
+          userId: adminUser.id,
+          email: adminUser.email,
+          role: adminUser.role,
+          name: adminUser.name
+        })
+        
+        console.log('Tokens generated successfully')
+
+      // Set refresh token as httpOnly cookie
+      res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      })
+
       res.json({
         success: true,
-        message: '管理者認証が完了しました'
+        message: '管理者認証が完了しました',
+        user: {
+          id: adminUser.id,
+          email: adminUser.email,
+          name: adminUser.name,
+          role: adminUser.role
+        },
+        tokens: {
+          accessToken,
+          refreshToken
+        }
       })
+      } catch (innerError) {
+        console.error('Inner error during admin auth:', innerError)
+        throw innerError
+      }
     } else {
       res.status(401).json({
         error: '管理者パスワードが間違っています'
@@ -61,17 +127,17 @@ router.put('/users/:id/role', AdminController.updateUserRole)
 router.put('/users/:id/status', AdminController.updateUserStatus)
 
 // Course Management
-router.get('/courses', AdminController.getCourses)
-router.post('/courses', AdminController.createCourse)
-router.put('/courses/:id', AdminController.updateCourse)
-router.delete('/courses/:id', AdminController.deleteCourse)
-router.put('/courses/:id/publish', AdminController.publishCourse)
+router.get('/courses', authenticateToken, requireInstructorOrAdmin, AdminController.getCourses)
+router.post('/courses', authenticateToken, requireInstructorOrAdmin, AdminController.createCourse)
+router.put('/courses/:id', authenticateToken, requireInstructorOrAdmin, AdminController.updateCourse)
+router.delete('/courses/:id', authenticateToken, requireAdmin, AdminController.deleteCourse)
+router.put('/courses/:id/publish', authenticateToken, requireInstructorOrAdmin, AdminController.publishCourse)
 
 // Lesson Management
-router.get('/lessons', AdminController.getLessons)
-router.post('/lessons', AdminController.createLesson)
-router.put('/lessons/:id', AdminController.updateLesson)
-router.delete('/lessons/:id', AdminController.deleteLesson)
+router.get('/lessons', authenticateToken, requireInstructorOrAdmin, AdminController.getLessons)
+router.post('/lessons', authenticateToken, requireInstructorOrAdmin, AdminController.createLesson)  
+router.put('/lessons/:id', authenticateToken, requireInstructorOrAdmin, AdminController.updateLesson)
+router.delete('/lessons/:id', authenticateToken, requireAdmin, AdminController.deleteLesson)
 
 // Video Upload (Vimeo integration)
 router.post('/upload/video', AdminController.uploadVideo)
@@ -88,24 +154,80 @@ router.get('/chat/rooms', async (req: express.Request, res: express.Response) =>
     const { prisma } = require('../index')
     
     // Get all chat rooms (courses used as chat rooms)
-    const rooms = await prisma.course.findMany({
+    const courses = await prisma.course.findMany({
       select: {
         id: true,
         title: true,
         slug: true,
-        createdAt: true,
-        _count: {
-          select: {
-            messages: true
-          }
-        }
+        createdAt: true
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'asc' }
     })
+    
+    // Get private rooms (password-protected rooms)
+    const privateRooms = await prisma.privateRoom.findMany({
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        accessKey: true,
+        isPublic: true,
+        createdAt: true
+      },
+      orderBy: { createdAt: 'asc' }
+    })
+
+    // Get message counts for each course
+    const coursesWithCounts = await Promise.all(courses.map(async (course) => {
+      const messageCount = await prisma.chatMessage.count({
+        where: { courseId: course.id }
+      })
+      
+      return {
+        id: course.id,
+        title: course.title,
+        slug: course.slug,
+        createdAt: course.createdAt,
+        messageCount,
+        type: 'course',
+        isLocked: false,
+        _count: {
+          messages: messageCount
+        }
+      }
+    }))
+    
+    // Get message counts for private rooms and add lock prefix for password-protected ones
+    const privateRoomsWithCounts = await Promise.all(privateRooms.map(async (room) => {
+      const messageCount = await prisma.chatMessage.count({
+        where: { privateRoomId: room.id }
+      })
+      
+      const isPasswordProtected = !room.isPublic && room.accessKey
+      const displayTitle = isPasswordProtected ? `🔒 ${room.name}` : room.name
+      
+      return {
+        id: room.id,
+        title: displayTitle,
+        slug: room.slug,
+        createdAt: room.createdAt,
+        messageCount,
+        type: 'private',
+        isLocked: isPasswordProtected,
+        _count: {
+          messages: messageCount
+        }
+      }
+    }))
+    
+    // Combine both types of rooms
+    const allRooms = [...coursesWithCounts, ...privateRoomsWithCounts].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    )
 
     res.json({
       success: true,
-      rooms
+      rooms: allRooms
     })
   } catch (error) {
     console.error('Get chat rooms error:', error)
@@ -171,14 +293,7 @@ router.delete('/chat/rooms/:id', async (req: express.Request, res: express.Respo
 
     // Check if room exists
     const room = await prisma.course.findUnique({
-      where: { id },
-      include: {
-        _count: {
-          select: {
-            messages: true
-          }
-        }
-      }
+      where: { id }
     })
 
     if (!room) {
@@ -192,7 +307,44 @@ router.delete('/chat/rooms/:id', async (req: express.Request, res: express.Respo
       where: { courseId: id }
     })
 
-    // Delete the room
+    // Delete all enrollments for this course
+    await prisma.enrollment.deleteMany({
+      where: { courseId: id }
+    })
+
+    // Delete all lessons for this course
+    const lessons = await prisma.lesson.findMany({
+      where: { courseId: id }
+    })
+
+    for (const lesson of lessons) {
+      // Delete progress records for each lesson
+      await prisma.progress.deleteMany({
+        where: { lessonId: lesson.id }
+      })
+      
+      // Delete user lesson access records
+      await prisma.userLessonAccess.deleteMany({
+        where: { lessonId: lesson.id }
+      })
+
+      // Delete resources for each lesson
+      await prisma.resource.deleteMany({
+        where: { lessonId: lesson.id }
+      })
+      
+      // Delete chat messages for each lesson
+      await prisma.chatMessage.deleteMany({
+        where: { lessonId: lesson.id }
+      })
+    }
+
+    // Delete all lessons
+    await prisma.lesson.deleteMany({
+      where: { courseId: id }
+    })
+
+    // Finally delete the room/course
     await prisma.course.delete({
       where: { id }
     })
@@ -347,21 +499,40 @@ router.post('/change-password', async (req: express.Request, res: express.Respon
     }
 
     const { currentPassword, newPassword } = validation.data
-    const adminPassword = process.env.ADMIN_ACCESS_PASSWORD || 'tiger-dojo'
+    
+    // Get current password from file or environment
+    const getCurrentAdminPassword = (): string => {
+      const passwordFilePath = path.join(process.cwd(), '.admin-password')
+      if (fs.existsSync(passwordFilePath)) {
+        return fs.readFileSync(passwordFilePath, 'utf8').trim()
+      }
+      return process.env.ADMIN_ACCESS_PASSWORD || 'tiger-dojo'
+    }
+    
+    const currentAdminPassword = getCurrentAdminPassword()
 
-    if (currentPassword !== adminPassword) {
+    if (currentPassword !== currentAdminPassword) {
       return res.status(401).json({
         error: '現在のパスワードが間違っています'
       })
     }
 
-    // 注意: 実際の運用では環境変数ファイルの書き換えではなく、
-    // データベースに保存するか、より安全な方法を使用することを推奨
-    res.json({
-      success: true,
-      message: 'パスワード変更が完了しました。新しいパスワードを有効にするには環境変数を更新してください。',
-      note: `新しいパスワード: ${newPassword}`
-    })
+    // Save new password to file
+    try {
+      const passwordFilePath = path.join(process.cwd(), '.admin-password')
+      fs.writeFileSync(passwordFilePath, newPassword, 'utf8')
+      console.log('✅ Admin password updated successfully')
+      
+      res.json({
+        success: true,
+        message: 'パスワード変更が完了しました。すぐに新しいパスワードが有効になります。'
+      })
+    } catch (fileError) {
+      console.error('❌ Failed to save new password:', fileError)
+      res.status(500).json({
+        error: 'パスワード保存中にエラーが発生しました'
+      })
+    }
 
   } catch (error) {
     console.error('Admin password change error:', error)

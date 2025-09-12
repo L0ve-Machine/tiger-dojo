@@ -34,7 +34,7 @@ export class DashboardService {
         (total, progress) => total + (progress.watchedSeconds || 0),
         0
       )
-      const totalWatchedHours = Math.round(totalWatchedSeconds / 3600 * 10) / 10 // 小数点1位まで
+      const totalWatchedHours = Math.round(totalWatchedSeconds / 60 * 10) / 10 // 分単位に変更、小数点1位まで
 
       // ログイン日数を計算（ユニークな日付をカウント）
       const loginDates = new Set<string>()
@@ -119,7 +119,7 @@ export class DashboardService {
         (total, progress) => total + (progress.watchedSeconds || 0),
         0
       )
-      const weeklyWatchedHours = Math.round(weeklyWatchedSeconds / 3600 * 10) / 10
+      const weeklyWatchedHours = Math.round(weeklyWatchedSeconds / 60 * 10) / 10 // 分単位に変更
 
       return {
         user: {
@@ -170,7 +170,7 @@ export class DashboardService {
           (total, progress) => total + (progress.watchedSeconds || 0),
           0
         )
-        const totalWatchedHours = Math.round(totalWatchedSeconds / 3600 * 10) / 10
+        const totalWatchedHours = Math.round(totalWatchedSeconds / 60 * 10) / 10 // 分単位に変更
         const completedLessons = user.progress.filter(p => p.completed).length
 
         return {

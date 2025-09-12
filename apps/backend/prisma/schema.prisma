@@ -37,6 +37,11 @@ model User {
   lessonAccess    UserLessonAccess[]
   grantedAccess   UserLessonAccess[] @relation("AccessGranter")
   
+  // Private Room relations
+  createdPrivateRooms PrivateRoom[] @relation("PrivateRoomCreator")
+  privateRoomMemberships PrivateRoomMember[]
+  invitedMembers  PrivateRoomMember[] @relation("PrivateRoomInviter")
+  
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }
@@ -192,6 +197,8 @@ model ChatMessage {
   courseId        String?   // For course-level chat channels
   channelId       String    @default("general") // Channel identifier (general, announcements, questions, resources)
   dmRoomId        String?   // For direct messages (format: userId1_userId2)
+  privateRoomId   String?   // For private room messages
+  privateRoom     PrivateRoom? @relation(fields: [privateRoomId], references: [id])
   content         String
   type            String    @default("TEXT")
   isEdited        Boolean   @default(false)
@@ -199,6 +206,57 @@ model ChatMessage {
   
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+}
+
+// Private Room System
+model PrivateRoom {
+  id              String    @id @default(cuid())
+  name            String    // Room name
+  description     String?   // Room description
+  slug            String    @unique // URL-friendly identifier
+  accessKey       String?   // Optional access key for entry
+  isPublic        Boolean   @default(false) // Public rooms don't require access key
+  maxMembers      Int       @default(50) // Maximum number of members
+  
+  // Room creator/owner
+  createdBy       String
+  creator         User      @relation("PrivateRoomCreator", fields: [createdBy], references: [id])
+  
+  // Room settings
+  allowInvites    Boolean   @default(true) // Members can invite others
+  requireApproval Boolean   @default(false) // New members need approval
+  
+  // Relations
+  members         PrivateRoomMember[]
+  messages        ChatMessage[]
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model PrivateRoomMember {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  roomId          String
+  room            PrivateRoom @relation(fields: [roomId], references: [id])
+  
+  role            String    @default("MEMBER") // OWNER, MODERATOR, MEMBER
+  joinedAt        DateTime  @default(now())
+  invitedBy       String?   // Who invited this member
+  inviter         User?     @relation("PrivateRoomInviter", fields: [invitedBy], references: [id])
+  
+  // Member status
+  isActive        Boolean   @default(true)
+  isBanned        Boolean   @default(false)
+  bannedAt        DateTime?
+  bannedBy        String?
+  banReason       String?
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@unique([userId, roomId])
 }
 
 // Invite System Models
@@ -298,7 +356,7 @@ model Payment {
 // Role: STUDENT, INSTRUCTOR, ADMIN
 // Gender: MALE, FEMALE, OTHER, PREFER_NOT_TO_SAY
 // TradingExperience: BEGINNER, UNDER_1_YEAR, ONE_TO_THREE, OVER_THREE
-// ReleaseType: IMMEDIATE, SCHEDULED, DRIP, PREREQUISITE
+// ReleaseType: IMMEDIATE, SCHEDULED, DRIP, PREREQUISITE, HIDDEN
 // MessageType: TEXT, QUESTION, ANSWER, ANNOUNCEMENT
 // SubscriptionStatus: ACTIVE, EXPIRED, CANCELLED, PENDING
 // PaymentStatus: PENDING, COMPLETED, FAILED, REFUNDED

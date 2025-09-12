@@ -15,8 +15,8 @@ export interface TokenPair {
 export class JWTUtils {
   private static ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || 'fallback-access-secret'
   private static REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback-refresh-secret'
-  private static ACCESS_EXPIRES = process.env.JWT_ACCESS_EXPIRES || '15m'
-  private static REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES || '7d'
+  private static ACCESS_EXPIRES = process.env.JWT_ACCESS_EXPIRES || '8760h'
+  private static REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES || '8760h'
 
   static generateTokenPair(payload: JWTPayload): TokenPair {
     // Add unique identifier to prevent token collision
@@ -98,4 +98,9 @@ export class JWTUtils {
     
     return 7 * 24 * 60 * 60 * 1000 // Default 7 days
   }
+}
+
+// Export standalone function for backward compatibility
+export const generateTokens = (payload: JWTPayload): TokenPair => {
+  return JWTUtils.generateTokenPair(payload)
 }
