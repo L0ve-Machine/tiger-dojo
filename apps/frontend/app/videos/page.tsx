@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/auth-store'
 import { courseApi } from '@/lib/api'
-import { Play, Lock, Clock, Calendar, ChevronRight } from 'lucide-react'
+import { Play, Lock, Clock, Calendar, ChevronRight, Menu, X } from 'lucide-react'
 import Image from 'next/image'
 
 interface Lesson {
@@ -37,6 +37,7 @@ export default function VideosPage() {
   const [lessons, setLessons] = useState<Lesson[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   // Fetch lessons from API
   const fetchLessons = async () => {
@@ -59,7 +60,9 @@ export default function VideosPage() {
           releaseDays: lesson.releaseDays,
           releaseDate: lesson.releaseDate,
           userAccess: lesson.userAccess,
-          orderIndex: lesson.orderIndex
+          orderIndex: lesson.orderIndex,
+          isAvailable: lesson.userAccess?.isAvailable,
+          daysUntilAvailable: lesson.userAccess?.daysUntilAvailable
         })
       })
       
@@ -69,7 +72,7 @@ export default function VideosPage() {
       console.error('❌ [DEBUG] Error config:', err?.config)
       console.error('❌ [DEBUG] Error response:', err?.response?.data)
       console.error('❌ [DEBUG] Error status:', err?.response?.status)
-      setError(`動画の取得に失敗しました: ${err?.response?.data?.error || err.message}`)
+      setError(`講習の取得に失敗しました: ${err?.response?.data?.error || err.message}`)
     } finally {
       setIsLoading(false)
     }
@@ -86,23 +89,29 @@ export default function VideosPage() {
     }
   }, [isAuthenticated, authLoading, router, user])
 
-  // Group lessons by release type for better organization
+  // Group lessons by availability (available vs unavailable)
   const groupedLessons = React.useMemo(() => {
-    const immediate = lessons.filter(lesson => lesson.releaseType === 'IMMEDIATE')
-    const drip = lessons.filter(lesson => lesson.releaseType === 'DRIP')
-    const scheduled = lessons.filter(lesson => lesson.releaseType === 'SCHEDULED')
-    const prerequisite = lessons.filter(lesson => lesson.releaseType === 'PREREQUISITE')
+    // All lessons sorted by order index
+    const sortedLessons = lessons.sort((a, b) => a.orderIndex - b.orderIndex)
+    
+    // Available lessons (can be watched)
+    const available = sortedLessons.filter(lesson => lesson.userAccess?.isAvailable === true)
+    
+    // Unavailable lessons (cannot be watched) - limit to max 2
+    const unavailable = sortedLessons
+      .filter(lesson => lesson.userAccess?.isAvailable !== true)
+      .slice(0, 2) // 最大2つまで表示
     
     return {
-      immediate: immediate.sort((a, b) => a.orderIndex - b.orderIndex),
-      drip: drip.sort((a, b) => a.orderIndex - b.orderIndex),
-      scheduled: scheduled.sort((a, b) => a.orderIndex - b.orderIndex),
-      prerequisite: prerequisite.sort((a, b) => a.orderIndex - b.orderIndex)
+      available,
+      unavailable
     }
   }, [lessons])
 
   const isLessonAvailable = (lesson: Lesson): boolean => {
-    return lesson.userAccess?.isAvailable ?? false
+    // より安全なアクセス判定
+    if (!lesson.userAccess) return false
+    return lesson.userAccess.isAvailable === true
   }
 
   const getDaysUntilAvailable = (lesson: Lesson): number => {
@@ -145,24 +154,27 @@ export default function VideosPage() {
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black">
       {/* Header */}
       <header className="border-b border-gray-800 bg-black/50 backdrop-blur">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Image 
-                src="/images/lion-tech.jpeg" 
-                alt="Lion Logo" 
-                width={40}
-                height={40}
-                className="rounded-lg object-cover"
-              />
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-yellow-400 to-amber-600 bg-clip-text text-transparent">
+              <div className="w-8 md:w-10 h-8 md:h-10 rounded-xl overflow-hidden shadow-lg">
+                <Image 
+                  src="/images/lion-tech.jpeg" 
+                  alt="Lion Logo" 
+                  width={40}
+                  height={40}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <h1 className="text-lg md:text-2xl font-bold bg-gradient-to-r from-yellow-400 to-amber-600 bg-clip-text text-transparent">
                 トレード道場
               </h1>
             </div>
             
-            <nav className="flex items-center gap-6">
+            {/* Desktop Navigation */}
+            <nav className="hidden md:flex items-center gap-6">
               <Link href="/videos" className="text-yellow-400 font-medium">
-                動画
+                講習
               </Link>
               <Link href="/chat" className="text-gray-400 hover:text-white transition">
                 チャット
@@ -171,7 +183,44 @@ export default function VideosPage() {
                 ダッシュボード
               </Link>
             </nav>
+
+            {/* Mobile Menu Button */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 text-gray-400 hover:text-white transition"
+            >
+              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
           </div>
+
+          {/* Mobile Menu */}
+          {mobileMenuOpen && (
+            <div className="md:hidden mt-4 py-4 border-t border-gray-700">
+              <div className="space-y-4">
+                <Link 
+                  href="/videos" 
+                  className="block text-yellow-400 font-medium"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  講習
+                </Link>
+                <Link 
+                  href="/chat" 
+                  className="block text-gray-400 hover:text-white transition"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  チャット
+                </Link>
+                <Link 
+                  href="/dashboard" 
+                  className="block text-gray-400 hover:text-white transition"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  ダッシュボード
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
       </header>
 
@@ -182,14 +231,14 @@ export default function VideosPage() {
             ダッシュボード
           </Link>
           <ChevronRight className="w-4 h-4" />
-          <span className="text-white">動画一覧</span>
+          <span className="text-white">講習一覧</span>
         </div>
 
         {/* Page Header */}
         <div className="mb-12">
           <h2 className="text-4xl font-bold text-white mb-4">学習コンテンツ</h2>
           <p className="text-gray-300 text-lg">
-            月2本の厳選された動画でプロトレーダーへの道を歩みましょう
+            月2本の厳選された講習でプロトレーダーへの道を歩みましょう
           </p>
         </div>
 
@@ -202,84 +251,42 @@ export default function VideosPage() {
 
         {/* Lessons by Category */}
         <div className="space-y-12">
-          {/* Immediate Access Lessons */}
-          {groupedLessons.immediate.length > 0 && (
+          {/* Available Lessons */}
+          {groupedLessons.available.length > 0 && (
             <div className="space-y-4">
               <div className="flex items-center gap-4">
-                <div className="px-4 py-2 rounded-lg font-bold text-sm bg-gradient-to-r from-yellow-500 to-amber-600 text-black">
-                  すぐに視聴可能
+                <div className="px-4 py-2 rounded-lg font-bold text-sm bg-gradient-to-r from-green-500 to-emerald-600 text-white">
+                  視聴可能
                 </div>
                 <div className="flex-1 h-px bg-gray-800"></div>
                 <span className="text-sm text-gray-500">
-                  {groupedLessons.immediate.length}本の動画
+                  {groupedLessons.available.length}本の講習
                 </span>
               </div>
 
               <div className="grid md:grid-cols-2 gap-6">
-                {groupedLessons.immediate.map((lesson) => (
+                {groupedLessons.available.map((lesson) => (
                   <LessonCard key={lesson.id} lesson={lesson} />
                 ))}
               </div>
             </div>
           )}
 
-          {/* Drip Release Lessons */}
-          {groupedLessons.drip.length > 0 && (
+          {/* Unavailable Lessons (max 2) */}
+          {groupedLessons.unavailable.length > 0 && (
             <div className="space-y-4">
               <div className="flex items-center gap-4">
-                <div className="px-4 py-2 rounded-lg font-bold text-sm bg-blue-600/80 text-white">
-                  段階的リリース
+                <div className="px-4 py-2 rounded-lg font-bold text-sm bg-gradient-to-r from-gray-600 to-gray-700 text-white">
+                  視聴不可
                 </div>
                 <div className="flex-1 h-px bg-gray-800"></div>
                 <span className="text-sm text-gray-500">
-                  {groupedLessons.drip.length}本の動画
+                  {groupedLessons.unavailable.length}本の講習
                 </span>
               </div>
 
               <div className="grid md:grid-cols-2 gap-6">
-                {groupedLessons.drip.map((lesson) => (
-                  <LessonCard key={lesson.id} lesson={lesson} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Scheduled Release Lessons */}
-          {groupedLessons.scheduled.length > 0 && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <div className="px-4 py-2 rounded-lg font-bold text-sm bg-purple-600/80 text-white">
-                  予定リリース
-                </div>
-                <div className="flex-1 h-px bg-gray-800"></div>
-                <span className="text-sm text-gray-500">
-                  {groupedLessons.scheduled.length}本の動画
-                </span>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-6">
-                {groupedLessons.scheduled.map((lesson) => (
-                  <LessonCard key={lesson.id} lesson={lesson} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Prerequisite Lessons */}
-          {groupedLessons.prerequisite.length > 0 && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <div className="px-4 py-2 rounded-lg font-bold text-sm bg-orange-600/80 text-white">
-                  前提条件付き
-                </div>
-                <div className="flex-1 h-px bg-gray-800"></div>
-                <span className="text-sm text-gray-500">
-                  {groupedLessons.prerequisite.length}本の動画
-                </span>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-6">
-                {groupedLessons.prerequisite.map((lesson) => (
+                {groupedLessons.unavailable.map((lesson) => (
                   <LessonCard key={lesson.id} lesson={lesson} />
                 ))}
               </div>
@@ -292,7 +299,7 @@ export default function VideosPage() {
               <div className="w-20 h-20 bg-gray-800/50 rounded-full flex items-center justify-center mx-auto mb-6">
                 <Play className="w-10 h-10 text-gray-600" />
               </div>
-              <h3 className="text-xl font-semibold text-white mb-2">動画がまだありません</h3>
+              <h3 className="text-xl font-semibold text-white mb-2">講習がまだありません</h3>
               <p className="text-gray-400">新しいコンテンツが追加されるまでお待ちください。</p>
             </div>
           )}
@@ -307,7 +314,7 @@ export default function VideosPage() {
             <h3 className="text-2xl font-bold text-white">今後のコンテンツ</h3>
           </div>
           <p className="text-gray-300">
-            毎月2本の新しい動画を追加していきます。継続的な学習でプロトレーダーへの道を着実に歩んでいきましょう。
+            毎月2本の新しい講習を追加していきます。継続的な学習でプロトレーダーへの道を着実に歩んでいきましょう。
           </p>
         </div>
       </main>
@@ -348,6 +355,16 @@ function LessonCard({ lesson }: { lesson: Lesson }) {
   }
 
   const getReleaseInfo = () => {
+    if (!isAvailable) {
+      if (lesson.releaseType === 'DRIP' && lesson.releaseDays) {
+        const daysUntil = lesson.userAccess?.daysUntilAvailable ?? 0
+        if (daysUntil > 0) {
+          return `あと${daysUntil}日で視聴可能`
+        }
+      }
+      return '視聴不可'
+    }
+    
     switch (lesson.releaseType) {
       case 'IMMEDIATE':
         return '視聴可能'
@@ -357,8 +374,10 @@ function LessonCard({ lesson }: { lesson: Lesson }) {
         return lesson.releaseDate ? new Date(lesson.releaseDate).toLocaleDateString('ja-JP') : '日付未設定'
       case 'PREREQUISITE':
         return '前提条件あり'
+      case 'HIDDEN':
+        return '非公開'
       default:
-        return '不明'
+        return '視聴可能'
     }
   }
 
@@ -447,17 +466,8 @@ function LessonCard({ lesson }: { lesson: Lesson }) {
         <h3 className="text-xl font-bold text-white">
           {lesson.title}
         </h3>
-        {lesson.description && (
-          <p className="text-gray-400 text-sm leading-relaxed line-clamp-2">
-            {lesson.description}
-          </p>
-        )}
         <div className="flex items-center gap-4 text-sm text-gray-500">
-          <span>#{lesson.orderIndex}</span>
           <span>{getReleaseInfo()}</span>
-          {lesson.course.title && (
-            <span className="text-yellow-400">{lesson.course.title}</span>
-          )}
         </div>
       </div>
     </div>

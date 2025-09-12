@@ -36,8 +36,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   }, [router])
 
   const handleLogout = () => {
-    // 管理者アクセス権限をクリア
+    // 管理者アクセス権限とJWTトークンをクリア
     sessionStorage.removeItem('adminAccess')
+    localStorage.removeItem('accessToken')
     router.push('/admin-login')
   }
 
@@ -47,8 +48,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     { icon: BarChart3, label: 'ダッシュボード', href: '/admin', adminOnly: false },
     { icon: UserCheck, label: '承認待ちユーザー', href: '/admin/pending-users', adminOnly: true },
     { icon: Users, label: 'ユーザー管理', href: '/admin/users', adminOnly: true },
-    { icon: Video, label: 'レッスン管理', href: '/admin/lessons', adminOnly: false },
-    { icon: Upload, label: '動画アップロード', href: '/admin/upload', adminOnly: false },
+    { icon: Video, label: '講習管理', href: '/admin/lessons', adminOnly: false },
     { icon: MessageSquare, label: 'チャット管理', href: '/admin/chat', adminOnly: true },
     { icon: Settings, label: 'システム設定', href: '/admin/settings', adminOnly: true },
   ]

@@ -87,31 +87,23 @@ export default function DashboardPage() {
           setStatistics(statsResponse.data.data)
         }
 
-        // 最新のレッスンを取得
-        const coursesResponse = await courseApi.getAllCourses()
-        if (coursesResponse.data.courses) {
-          const allLessons: LatestLesson[] = []
+        // 最新のレッスンを取得（アクセス権のあるレッスンのみ）
+        const lessonsResponse = await courseApi.getUserAvailableLessons()
+        if (lessonsResponse.data.lessons) {
+          const allLessons: LatestLesson[] = lessonsResponse.data.lessons.map((lesson: any) => ({
+            id: lesson.id,
+            title: lesson.title,
+            description: lesson.description || '',
+            duration: lesson.duration || 1800,
+            thumbnailUrl: lesson.thumbnailUrl || getVimeoThumbnail(lesson.videoUrl),
+            isLocked: !lesson.userAccess?.isAvailable,
+            releaseDate: lesson.releaseDate,
+            courseTitle: '',
+            progress: lesson.progress || null,
+            isAvailable: lesson.userAccess?.isAvailable || false
+          }))
           
-          coursesResponse.data.courses.forEach((course: any) => {
-            if (course.lessons) {
-              course.lessons.forEach((lesson: any) => {
-                allLessons.push({
-                  id: lesson.id,
-                  title: lesson.title,
-                  description: lesson.description || '',
-                  duration: lesson.duration || 1800,
-                  thumbnailUrl: lesson.thumbnailUrl,
-                  isLocked: lesson.isLocked || false,
-                  releaseDate: lesson.releaseDate,
-                  courseTitle: course.title,
-                  progress: lesson.userProgress?.[0] || null,
-                  isAvailable: lesson.isAvailable !== false
-                })
-              })
-            }
-          })
-          
-          // 最新の2つを取得
+          // 最新の2つを取得（アクセス制御情報を含む）
           setLatestLessons(allLessons.slice(0, 2))
         }
       } catch (error) {
@@ -125,6 +117,18 @@ export default function DashboardPage() {
       fetchDashboardData()
     }
   }, [user])
+
+  // Extract Vimeo ID from video URL and generate thumbnail
+  const getVimeoThumbnail = (videoUrl: string): string | null => {
+    if (!videoUrl) return null
+    
+    const match = videoUrl.match(/vimeo\.com\/video\/(\d+)/i) || videoUrl.match(/player\.vimeo\.com\/video\/(\d+)/i)
+    if (match) {
+      const vimeoId = match[1]
+      return `https://vumbnail.com/${vimeoId}.jpg`
+    }
+    return null
+  }
 
   const formatTimeAgo = (timestamp: string) => {
     const date = new Date(timestamp)
@@ -209,13 +213,10 @@ export default function DashboardPage() {
             {/* Desktop Navigation */}
             <nav className="hidden md:flex items-center gap-6">
               <Link href="/videos" className="text-gray-400 hover:text-white font-medium transition">
-                動画
+                講習
               </Link>
               <Link href="/chat" className="text-gray-400 hover:text-white font-medium transition">
                 チャット
-              </Link>
-              <Link href="/pricing" className="text-gray-400 hover:text-white font-medium transition">
-                料金プラン
               </Link>
               
               <div className="flex items-center gap-3 pl-6 border-l border-gray-600">
@@ -262,7 +263,7 @@ export default function DashboardPage() {
                   className="block text-gray-400 hover:text-white font-medium transition"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  動画
+                  講習
                 </Link>
                 <Link 
                   href="/chat" 
@@ -270,13 +271,6 @@ export default function DashboardPage() {
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   チャット
-                </Link>
-                <Link 
-                  href="/pricing" 
-                  className="block text-gray-400 hover:text-white font-medium transition"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  料金プラン
                 </Link>
                 
                 <div className="pt-4 border-t border-gray-700">
@@ -309,7 +303,7 @@ export default function DashboardPage() {
               おかえりなさい、{user.name}さん！
             </h2>
             <p className="text-sm md:text-base text-gray-300 mb-4 md:mb-6 leading-relaxed">
-              FX Tiger Dojoへようこそ。今月の新しいレッスンをチェックして、
+              FXトレード道場へようこそ。今月の新しいレッスンをチェックして、
               プロトレーダーへの道を歩み続けましょう。
             </p>
             <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
@@ -318,7 +312,7 @@ export default function DashboardPage() {
                 className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-yellow-400 to-amber-600 text-black font-bold rounded-lg hover:from-yellow-500 hover:to-amber-700 transition shadow-md"
               >
                 <Play className="w-5 h-5" />
-                動画を見る
+                講習を見る
               </Link>
               <Link
                 href="/chat"
@@ -389,8 +383,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Course Progress */}
-        {statistics?.courseProgress && statistics.courseProgress.length > 0 && (
+        {/* Course Progress - Hidden as requested */}
+        {false && statistics?.courseProgress && statistics.courseProgress.length > 0 && (
           <section className="mb-12">
             <h3 className="text-2xl font-bold text-white mb-6">コース進捗</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -429,12 +423,16 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-              {latestLessons.map((lesson) => (
-                <Link 
-                  key={lesson.id} 
-                  href={lesson.isAvailable ? `/lessons/${lesson.id}` : '#'}
-                  className={`group cursor-pointer ${!lesson.isAvailable ? 'relative opacity-70' : ''}`}
-                >
+              {latestLessons.map((lesson) => {
+                const Component = lesson.isAvailable ? Link : 'div'
+                const linkProps = lesson.isAvailable ? { href: `/lessons/${lesson.id}` } : {}
+                
+                return (
+                  <Component 
+                    key={lesson.id} 
+                    {...linkProps}
+                    className={`group ${lesson.isAvailable ? 'cursor-pointer' : 'cursor-not-allowed'} ${!lesson.isAvailable ? 'relative opacity-70' : ''}`}
+                  >
                   <div className="relative aspect-video bg-gray-900 rounded-xl overflow-hidden border border-gray-700 group-hover:border-yellow-400/50 transition-all duration-300 shadow-lg">
                     <img 
                       src={lesson.thumbnailUrl || '/api/placeholder/640/360'} 
@@ -485,8 +483,9 @@ export default function DashboardPage() {
                       </div>
                     )}
                   </div>
-                </Link>
-              ))}
+                </Component>
+                )
+              })}
             </div>
           </section>
         )}

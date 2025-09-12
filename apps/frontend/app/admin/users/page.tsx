@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { adminApi } from '@/lib/api'
 import { 
   Search, 
@@ -15,7 +15,8 @@ import {
   Activity,
   Ban,
   CheckCircle,
-  AlertTriangle
+  AlertTriangle,
+  Trash2
 } from 'lucide-react'
 
 interface User {
@@ -48,6 +49,7 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [pagination, setPagination] = useState({
@@ -57,9 +59,23 @@ export default function UsersPage() {
     pages: 0
   })
 
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm)
+    }, 500) // 500ms delay
+
+    return () => clearTimeout(timer)
+  }, [searchTerm])
+
+  // Reset to first page when search term changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [debouncedSearchTerm, roleFilter])
+
   useEffect(() => {
     fetchUsers()
-  }, [currentPage, searchTerm, roleFilter])
+  }, [currentPage, debouncedSearchTerm, roleFilter])
 
   const fetchUsers = async () => {
     try {
@@ -67,7 +83,7 @@ export default function UsersPage() {
       const params = {
         page: currentPage,
         limit: 20,
-        ...(searchTerm && { search: searchTerm }),
+        ...(debouncedSearchTerm && { search: debouncedSearchTerm }),
         ...(roleFilter && { role: roleFilter })
       }
 
@@ -105,6 +121,27 @@ export default function UsersPage() {
     } catch (err: any) {
       console.error('Update user role error:', err)
       alert('ユーザー権限の更新に失敗しました')
+    }
+  }
+
+  const deleteUser = async (userId: string, userName: string, userEmail: string) => {
+    if (!confirm(`⚠️ ユーザーを完全に削除しますか？\n\n名前: ${userName}\nメール: ${userEmail}\n\nこの操作は元に戻せません。ユーザーのすべてのデータ（進捗、メッセージ等）が削除されます。`)) {
+      return
+    }
+
+    try {
+      await adminApi.deleteUser(userId)
+      // Remove from local state
+      setUsers(users.filter(user => user.id !== userId))
+      // Update pagination total
+      setPagination(prev => ({
+        ...prev,
+        total: prev.total - 1
+      }))
+      alert('ユーザーが削除されました')
+    } catch (err: any) {
+      console.error('Delete user error:', err)
+      alert(err.response?.data?.error || 'ユーザーの削除に失敗しました')
     }
   }
 
@@ -320,11 +357,18 @@ export default function UsersPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <div className="flex items-center gap-1 justify-end">
+                      <div className="flex items-center gap-2 justify-end">
                         <div className="text-xs text-gray-500 flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
                           {formatDate(user.createdAt)}
                         </div>
+                        <button
+                          onClick={() => deleteUser(user.id, user.name, user.email)}
+                          className="p-1 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                          title="ユーザーを削除"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>

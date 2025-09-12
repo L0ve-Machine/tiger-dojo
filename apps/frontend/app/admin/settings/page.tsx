@@ -61,7 +61,7 @@ export default function AdminSettingsPage() {
                   required
                   value={passwordForm.currentPassword}
                   onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
-                  className="bg-gray-800/50 border-gray-600 text-white"
+                  className="bg-gray-800/50 border-gray-600 text-black"
                 />
               </div>
 
@@ -76,7 +76,7 @@ export default function AdminSettingsPage() {
                   minLength={4}
                   value={passwordForm.newPassword}
                   onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                  className="bg-gray-800/50 border-gray-600 text-white"
+                  className="bg-gray-800/50 border-gray-600 text-black"
                 />
               </div>
 

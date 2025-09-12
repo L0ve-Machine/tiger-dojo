@@ -201,7 +201,7 @@ export default function AdminLessonDetailPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Vimeo動画ID
+                  Vimeo講習ID
                 </label>
                 <input
                   type="text"
@@ -215,7 +215,7 @@ export default function AdminLessonDetailPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    動画時間（秒）
+                    講習時間（秒）
                   </label>
                   <input
                     type="number"

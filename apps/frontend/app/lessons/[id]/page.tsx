@@ -2,150 +2,197 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter, useParams } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { useAuthStore } from '@/lib/auth-store'
-import { ChevronRight, ArrowLeft, Play, Pause, Volume2, VolumeX, Maximize } from 'lucide-react'
+import { courseApi, vimeoApi } from '@/lib/api'
+import { ChevronRight, ArrowLeft, Play, Pause, Volume2, VolumeX, Maximize, Clock } from 'lucide-react'
 import Image from 'next/image'
+import AuthGuard from '@/components/auth/AuthGuard'
 
-interface VimeoVideo {
+interface Lesson {
   id: string
-  embedId: string
   title: string
-  monthIndex: number
+  description: string | null
+  videoUrl: string
+  duration?: number
   orderIndex: number
-  releaseDate?: Date
+  releaseType: 'IMMEDIATE' | 'SCHEDULED' | 'DRIP' | 'PREREQUISITE'
+  releaseDays?: number
+  releaseDate?: string
+  prerequisiteId?: string
+  course: {
+    id: string
+    title: string
+    slug: string
+  }
+  // Fields from getLessonById API
+  hasAccess?: boolean
+  accessReason?: string
+  availableIn?: number
+  // Legacy fields from getUserAvailableLessons
+  userAccess?: {
+    isAvailable: boolean
+    daysUntilAvailable: number
+  }
 }
 
-export default function LessonPage() {
-  const router = useRouter()
+interface Progress {
+  id: string
+  watchedSeconds: number
+  completed: boolean
+  completedAt?: string
+  lastWatchedAt: string
+}
+
+function LessonPageContent() {
   const params = useParams()
-  const { user, isAuthenticated, isLoading: authLoading } = useAuthStore()
+  const { user } = useAuthStore()
   
   const [isLoading, setIsLoading] = useState(true)
-  const [video, setVideo] = useState<VimeoVideo | null>(null)
-  const [availableMonths, setAvailableMonths] = useState(0)
-  const [vimeoMetadata, setVimeoMetadata] = useState<{
-    title: string
-    description: string
-    duration: number
-  } | null>(null)
-  const [watchedSeconds, setWatchedSeconds] = useState(0)
-  const [progressPercentage, setProgressPercentage] = useState(0)
+  const [lesson, setLesson] = useState<Lesson | null>(null)
+  const [relatedLessons, setRelatedLessons] = useState<Lesson[]>([])
+  const [progress, setProgress] = useState<Progress | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [videoDuration, setVideoDuration] = useState<number | null>(null)
+  const [loadingVideoDuration, setLoadingVideoDuration] = useState(false)
+  const [vimeoDescription, setVimeoDescription] = useState<string | null>(null)
+  const [loadingVimeoDescription, setLoadingVimeoDescription] = useState(false)
 
-  // Vimeo動画データ (videos/page.tsxと同じデータ)
-  const vimeoVideos: VimeoVideo[] = [
-    {
-      id: '1',
-      embedId: '1115276237',
-      title: 'サンプル動画１',
-      monthIndex: 0,
-      orderIndex: 0
-    },
-    {
-      id: '2',
-      embedId: '1115277774',
-      title: 'サンプル動画２',
-      monthIndex: 0,
-      orderIndex: 1
-    },
-    {
-      id: '3',
-      embedId: '1115278244',
-      title: 'サンプル動画３',
-      monthIndex: 1,
-      orderIndex: 2,
-      releaseDate: user?.createdAt ? new Date(new Date(user.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000) : undefined
-    },
-    {
-      id: '4',
-      embedId: '1115278388',
-      title: 'サンプル動画４',
-      monthIndex: 1,
-      orderIndex: 3,
-      releaseDate: user?.createdAt ? new Date(new Date(user.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000) : undefined
+  // Fetch lesson and related data
+  const fetchLessonData = async (lessonId: string) => {
+    try {
+      setIsLoading(true)
+      const [lessonResponse, lessonsResponse] = await Promise.all([
+        courseApi.getLessonById(lessonId),
+        courseApi.getUserAvailableLessons()
+      ])
+      
+      // Backend returns { lesson: ... } format
+      const lessonData = lessonResponse.data.lesson || lessonResponse.data
+      setLesson(lessonData)
+      
+      // Fetch actual video data from Vimeo
+      if (lessonData?.videoUrl) {
+        await fetchVimeoData(lessonData.videoUrl)
+      }
+      
+      // Handle the correct response format from getUserAvailableLessons
+      const lessonsData = lessonsResponse.data?.lessons || lessonsResponse.data || []
+      setRelatedLessons(lessonsData.filter((l: Lesson) => l.id !== lessonId))
+      
+      // Get progress if available
+      if (lessonResponse.data) {
+        const progressData = localStorage.getItem(`video-progress-${lessonId}`)
+        if (progressData) {
+          setProgress(JSON.parse(progressData))
+        }
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch lesson:', err)
+      setError('レッスンの取得に失敗しました')
+    } finally {
+      setIsLoading(false)
     }
-  ]
+  }
 
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.push('/auth/login')
-      return
+    if (user && params.id) {
+      fetchLessonData(params.id as string)
     }
+  }, [user, params.id])
 
-    if (isAuthenticated && user && params.id) {
-      calculateAvailableMonths()
-      findVideo(params.id as string)
-    }
-  }, [isAuthenticated, authLoading, router, user, params.id])
-
-  const calculateAvailableMonths = () => {
-    if (user?.createdAt) {
-      const registrationDate = new Date(user.createdAt)
-      const now = new Date()
-      
-      const monthsDiff = 
-        (now.getFullYear() - registrationDate.getFullYear()) * 12 +
-        (now.getMonth() - registrationDate.getMonth())
-      
-      setAvailableMonths(Math.min(monthsDiff, 1))
-    } else {
-      setAvailableMonths(0)
-    }
+  // Format duration helper
+  const formatDuration = (seconds?: number) => {
+    if (!seconds) return '未設定'
+    const minutes = Math.floor(seconds / 60)
+    const remainingSeconds = seconds % 60
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
   }
 
-  const findVideo = (videoId: string) => {
-    const foundVideo = vimeoVideos.find(v => v.id === videoId)
-    if (foundVideo) {
-      setVideo(foundVideo)
-      // Vimeoメタデータを取得
-      fetchVimeoMetadata(foundVideo.embedId)
-      // ローカルストレージから進捗を取得
-      const savedProgress = localStorage.getItem(`video-progress-${foundVideo.id}`)
-      if (savedProgress) {
-        const progress = JSON.parse(savedProgress)
-        setWatchedSeconds(progress.watchedSeconds || 0)
-        setProgressPercentage(progress.percentage || 0)
-      }
-    }
-    setIsLoading(false)
+  // Extract Vimeo ID from video URL
+  const getVimeoId = (videoUrl: string): string | null => {
+    const match = videoUrl.match(/vimeo\.com\/video\/(\d+)/i) || videoUrl.match(/player\.vimeo\.com\/video\/(\d+)/i)
+    return match ? match[1] : null
   }
 
-  const fetchVimeoMetadata = async (embedId: string) => {
+  // Fetch video data from Vimeo API
+  const fetchVimeoData = async (videoUrl: string) => {
     try {
-      const response = await fetch(`https://vimeo.com/api/oembed.json?url=https://vimeo.com/${embedId}`)
-      const data = await response.json()
-      setVimeoMetadata({
-        title: data.title || '',
-        description: data.description || '',
-        duration: data.duration || 0
+      setLoadingVideoDuration(true)
+      setLoadingVimeoDescription(true)
+      const vimeoId = getVimeoId(videoUrl)
+      if (!vimeoId) {
+        console.warn('Could not extract Vimeo ID from URL:', videoUrl)
+        return
+      }
+
+      console.log(`🎬 [DEBUG] Fetching Vimeo data for URL: ${videoUrl}`)
+      const response = await vimeoApi.getVideoData(videoUrl)
+      const data = response.data
+      console.log('🎬 [DEBUG] Vimeo API response:', data)
+      
+      if (data.duration) {
+        setVideoDuration(data.duration)
+        console.log(`✅ [DEBUG] Fetched video duration from Vimeo: ${data.duration} seconds`)
+      }
+      
+      if (data.description) {
+        setVimeoDescription(data.description)
+        console.log(`✅ [DEBUG] Fetched video description from Vimeo: ${data.description}`)
+      } else {
+        console.log(`⚠️ [DEBUG] No description found in Vimeo data`)
+      }
+    } catch (error) {
+      console.error('❌ [DEBUG] Failed to fetch Vimeo data:', error)
+      // Fallback to database duration if Vimeo API fails
+      setVideoDuration(lesson?.duration || null)
+    } finally {
+      setLoadingVideoDuration(false)
+      setLoadingVimeoDescription(false)
+    }
+  }
+
+  // Update progress function
+  const updateProgress = async (currentTime: number, duration: number) => {
+    if (!lesson) return
+    
+    const watchedSeconds = Math.round(currentTime)
+    const percentage = Math.round((currentTime / duration) * 100)
+    const completed = percentage >= 90
+    
+    const progressData = {
+      id: lesson.id,
+      watchedSeconds,
+      completed,
+      percentage,
+      lastWatchedAt: new Date().toISOString(),
+      completedAt: completed ? new Date().toISOString() : undefined
+    }
+    
+    setProgress(progressData)
+    localStorage.setItem(`video-progress-${lesson.id}`, JSON.stringify(progressData))
+    
+    try {
+      // Update progress on server
+      await courseApi.updateLessonProgress(lesson.id, {
+        watchedSeconds,
+        completed
       })
     } catch (error) {
-      console.error('Failed to fetch Vimeo metadata:', error)
+      console.error('Failed to update progress on server:', error)
     }
   }
 
-  // 進捗を更新する関数
-  const updateProgress = (currentTime: number, duration: number) => {
-    const percentage = Math.round((currentTime / duration) * 100)
-    setWatchedSeconds(Math.round(currentTime))
-    setProgressPercentage(percentage)
-    
-    // ローカルストレージに保存
-    if (video) {
-      const progress = {
-        watchedSeconds: Math.round(currentTime),
-        percentage: percentage,
-        updatedAt: new Date().toISOString()
-      }
-      localStorage.setItem(`video-progress-${video.id}`, JSON.stringify(progress))
-    }
+  // Get current video duration (prefer Vimeo duration over database)
+  const getCurrentDuration = () => {
+    return videoDuration || lesson?.duration || 0
   }
 
-  const isVideoAvailable = (video: VimeoVideo): boolean => {
-    return video.monthIndex <= availableMonths
+  const isLessonAvailable = (lessonToCheck: Lesson): boolean => {
+    return lessonToCheck.userAccess?.isAvailable ?? false
   }
 
-  if (authLoading || isLoading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black flex items-center justify-center">
         <div className="text-center">
@@ -158,7 +205,7 @@ export default function LessonPage() {
     )
   }
 
-  if (!video) {
+  if (!lesson) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black flex items-center justify-center">
         <div className="text-center">
@@ -168,24 +215,34 @@ export default function LessonPage() {
             href="/videos" 
             className="bg-gradient-to-r from-yellow-400 to-amber-600 text-black px-6 py-3 rounded-lg font-semibold hover:from-yellow-300 hover:to-amber-500 transition-all"
           >
-            動画一覧に戻る
+            講習一覧に戻る
           </Link>
         </div>
       </div>
     )
   }
 
-  if (!isVideoAvailable(video)) {
+  // Check access using the correct field from getLessonById response
+  const hasAccess = lesson.hasAccess ?? lesson.userAccess?.isAvailable ?? false
+  
+  if (!hasAccess) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-white mb-4">このレッスンはまだ視聴できません</h1>
-          <p className="text-gray-400 mb-6">時期が来たら視聴可能になります</p>
+          <p className="text-gray-400 mb-6">
+            {lesson.accessReason || (lesson.userAccess?.daysUntilAvailable && lesson.userAccess.daysUntilAvailable > 0)
+              ? lesson.accessReason || `あと${lesson.userAccess?.daysUntilAvailable}日で視聴可能になります`
+              : lesson.availableIn && lesson.availableIn > 0
+              ? `あと${lesson.availableIn}日で視聴可能になります`
+              : '時期が来たら視聴可能になります'
+            }
+          </p>
           <Link 
             href="/videos" 
             className="bg-gradient-to-r from-yellow-400 to-amber-600 text-black px-6 py-3 rounded-lg font-semibold hover:from-yellow-300 hover:to-amber-500 transition-all"
           >
-            動画一覧に戻る
+            講習一覧に戻る
           </Link>
         </div>
       </div>
@@ -213,7 +270,7 @@ export default function LessonPage() {
             
             <nav className="flex items-center gap-6">
               <Link href="/videos" className="text-yellow-400 font-medium">
-                動画
+                講習
               </Link>
               <Link href="/chat" className="text-gray-400 hover:text-white transition">
                 チャット
@@ -234,10 +291,10 @@ export default function LessonPage() {
           </Link>
           <ChevronRight className="w-4 h-4" />
           <Link href="/videos" className="hover:text-white transition">
-            動画一覧
+            講習一覧
           </Link>
           <ChevronRight className="w-4 h-4" />
-          <span className="text-white">{video.title}</span>
+          <span className="text-white">{lesson.title}</span>
         </div>
 
         {/* Back Button */}
@@ -247,7 +304,7 @@ export default function LessonPage() {
             className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            動画一覧に戻る
+            講習一覧に戻る
           </Link>
         </div>
 
@@ -258,27 +315,26 @@ export default function LessonPage() {
             <div className="bg-black rounded-xl overflow-hidden border border-gray-800">
               <div className="aspect-video">
                 <iframe
-                  src={`https://player.vimeo.com/video/${video.embedId}?h=0&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479`}
+                  src={lesson.videoUrl}
                   width="100%"
                   height="100%"
                   frameBorder="0"
                   allow="autoplay; fullscreen; picture-in-picture"
                   allowFullScreen
-                  title={video.title}
+                  title={lesson.title}
                   className="w-full h-full"
                   onLoad={(e) => {
-                    // Vimeoプレーヤーの進捗を監視
+                    // Mock progress tracking - in real implementation, use Vimeo Player API
                     const iframe = e.target as HTMLIFrameElement
                     if (iframe.contentWindow) {
-                      // Vimeo Player API を使用して進捗を追跡（実際の実装では Vimeo Player SDK が必要）
                       setInterval(() => {
-                        // ダミーの進捗更新（実際の実装では Vimeo Player API を使用）
-                        const currentTime = watchedSeconds + Math.random() * 30
-                        const duration = vimeoMetadata?.duration || 1800 // デフォルト30分
-                        if (currentTime < duration) {
+                        const currentProgress = progress?.watchedSeconds || 0
+                        const currentTime = currentProgress + Math.random() * 30
+                        const duration = getCurrentDuration()
+                        if (duration && currentTime < duration) {
                           updateProgress(currentTime, duration)
                         }
-                      }, 10000) // 10秒ごとに更新
+                      }, 10000)
                     }
                   }}
                 ></iframe>
@@ -289,31 +345,55 @@ export default function LessonPage() {
             <div className="mt-6 space-y-4">
               <div>
                 <h1 className="text-3xl font-bold text-white mb-2">
-                  {vimeoMetadata?.title || video.title}
+                  {lesson.title}
                 </h1>
                 <div className="flex items-center gap-4 text-sm text-gray-400 mb-4">
                   <span className="px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-full border border-yellow-500/30">
                     視聴可能
                   </span>
                   <span>
-                    {video.monthIndex === 0 ? '登録直後' : `${video.monthIndex}ヶ月目`}
+                    {lesson.releaseType === 'IMMEDIATE' ? 'すぐに視聴可能' : 
+                     lesson.releaseType === 'DRIP' ? `登録${lesson.releaseDays}日後` :
+                     lesson.releaseType === 'SCHEDULED' ? '予定リリース' :
+                     '前提条件付き'}
                   </span>
-                  {vimeoMetadata?.duration && (
-                    <span>
-                      {Math.floor(vimeoMetadata.duration / 60)}分{vimeoMetadata.duration % 60}秒
+                  {(videoDuration || lesson.duration) && (
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-4 h-4" />
+                      {loadingVideoDuration ? (
+                        <span className="text-xs text-gray-400">読み込み中...</span>
+                      ) : (
+                        formatDuration(getCurrentDuration())
+                      )}
                     </span>
                   )}
+                  <span className="text-yellow-400">
+                    #{lesson.orderIndex}
+                  </span>
                 </div>
                 
-                {/* Video Description */}
-                {vimeoMetadata?.description && (
-                  <div className="bg-gray-800/30 rounded-lg p-4 border border-gray-700">
-                    <h3 className="text-sm font-semibold text-gray-300 mb-2">動画の概要</h3>
+                {/* Lesson Description - Show Vimeo description if available, otherwise show database description */}
+                <div className="bg-gray-800/30 rounded-lg p-4 border border-gray-700">
+                  <h3 className="text-sm font-semibold text-gray-300 mb-2">レッスンの概要</h3>
+                  {loadingVimeoDescription ? (
+                    <div className="text-gray-400 text-sm flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-400"></div>
+                      Vimeoから概要を読み込み中...
+                    </div>
+                  ) : vimeoDescription ? (
                     <p className="text-gray-300 leading-relaxed whitespace-pre-wrap">
-                      {vimeoMetadata.description}
+                      {vimeoDescription}
                     </p>
-                  </div>
-                )}
+                  ) : lesson.description ? (
+                    <p className="text-gray-300 leading-relaxed whitespace-pre-wrap">
+                      {lesson.description}
+                    </p>
+                  ) : (
+                    <p className="text-gray-500 text-sm italic">
+                      概要情報がありません
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -322,41 +402,44 @@ export default function LessonPage() {
           <div className="space-y-6">
             {/* Related Videos */}
             <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
-              <h3 className="text-xl font-bold text-white mb-4">関連動画</h3>
+              <h3 className="text-xl font-bold text-white mb-4">関連レッスン</h3>
               <div className="space-y-3">
-                {vimeoVideos
-                  .filter(v => v.id !== video.id)
-                  .slice(0, 4)
-                  .map((relatedVideo) => {
-                    const isAvailable = isVideoAvailable(relatedVideo)
-                    return (
-                      <Link
-                        key={relatedVideo.id}
-                        href={isAvailable ? `/lessons/${relatedVideo.id}` : '#'}
-                        className={`flex gap-3 p-3 rounded-lg transition-colors ${
-                          isAvailable 
-                            ? 'hover:bg-gray-700/50 cursor-pointer' 
-                            : 'opacity-50 cursor-not-allowed'
-                        }`}
-                      >
-                        <div className="w-16 h-12 bg-gray-700 rounded flex items-center justify-center flex-shrink-0">
-                          {isAvailable ? (
-                            <Play className="w-4 h-4 text-yellow-400" />
-                          ) : (
-                            <span className="text-xs text-gray-500">🔒</span>
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-sm font-medium text-white truncate">
-                            {relatedVideo.title}
-                          </h4>
-                          <p className="text-xs text-gray-400">
-                            {relatedVideo.monthIndex === 0 ? '登録直後' : `${relatedVideo.monthIndex}ヶ月目`}
-                          </p>
-                        </div>
-                      </Link>
-                    )
-                  })}
+                {relatedLessons.slice(0, 4).map((relatedLesson) => {
+                  const isAvailable = isLessonAvailable(relatedLesson)
+                  return (
+                    <Link
+                      key={relatedLesson.id}
+                      href={isAvailable ? `/lessons/${relatedLesson.id}` : '#'}
+                      className={`flex gap-3 p-3 rounded-lg transition-colors ${
+                        isAvailable 
+                          ? 'hover:bg-gray-700/50 cursor-pointer' 
+                          : 'opacity-50 cursor-not-allowed'
+                      }`}
+                    >
+                      <div className="w-16 h-12 bg-gray-700 rounded flex items-center justify-center flex-shrink-0">
+                        {isAvailable ? (
+                          <Play className="w-4 h-4 text-yellow-400" />
+                        ) : (
+                          <span className="text-xs text-gray-500">🔒</span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-medium text-white truncate">
+                          {relatedLesson.title}
+                        </h4>
+                        <p className="text-xs text-gray-400">
+                          #{relatedLesson.orderIndex}
+                        </p>
+                      </div>
+                    </Link>
+                  )
+                })}
+                
+                {relatedLessons.length === 0 && (
+                  <p className="text-gray-500 text-sm text-center py-4">
+                    他のレッスンがまだありません
+                  </p>
+                )}
               </div>
             </div>
 
@@ -367,24 +450,29 @@ export default function LessonPage() {
                 <div>
                   <div className="flex justify-between text-sm text-gray-400 mb-2">
                     <span>進捗</span>
-                    <span>{progressPercentage}%</span>
+                    <span>{progress?.percentage || 0}%</span>
                   </div>
                   <div className="w-full bg-gray-700 rounded-full h-2">
                     <div 
                       className="bg-yellow-400 h-2 rounded-full transition-all duration-300" 
-                      style={{ width: `${progressPercentage}%` }}
+                      style={{ width: `${progress?.percentage || 0}%` }}
                     ></div>
                   </div>
                 </div>
                 <div className="text-sm text-gray-400 space-y-1">
-                  <p>視聴時間: {Math.floor(watchedSeconds / 60)}分{watchedSeconds % 60}秒</p>
-                  {vimeoMetadata?.duration && (
-                    <p>総時間: {Math.floor(vimeoMetadata.duration / 60)}分{vimeoMetadata.duration % 60}秒</p>
+                  <p>視聴時間: {formatDuration(progress?.watchedSeconds || 0)}</p>
+                  {getCurrentDuration() > 0 && (
+                    <p>総時間: {loadingVideoDuration ? '読み込み中...' : formatDuration(getCurrentDuration())}</p>
                   )}
-                  <p>完了: {progressPercentage >= 90 ? '完了' : '未完了'}</p>
-                  {progressPercentage < 100 && (
+                  <p>状態: {progress?.completed ? '完了' : '視聴中'}</p>
+                  {progress?.completedAt && (
+                    <p className="text-green-400 text-xs">
+                      完了日: {new Date(progress.completedAt).toLocaleDateString('ja-JP')}
+                    </p>
+                  )}
+                  {!progress?.completed && getCurrentDuration() > 0 && progress?.watchedSeconds && (
                     <p className="text-yellow-400 text-xs">
-                      残り {Math.floor(((vimeoMetadata?.duration || 0) - watchedSeconds) / 60)}分
+                      残り {formatDuration(getCurrentDuration() - progress.watchedSeconds)}
                     </p>
                   )}
                 </div>
@@ -395,12 +483,20 @@ export default function LessonPage() {
                 <h4 className="text-sm font-semibold text-gray-300 mb-3">学習統計</h4>
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div className="bg-gray-700/30 rounded p-2">
-                    <div className="text-yellow-400 font-semibold">今日</div>
-                    <div className="text-gray-300">{Math.floor(watchedSeconds / 60)}分</div>
+                    <div className="text-yellow-400 font-semibold">今回</div>
+                    <div className="text-gray-300">{formatDuration(progress?.watchedSeconds || 0)}</div>
                   </div>
                   <div className="bg-gray-700/30 rounded p-2">
-                    <div className="text-yellow-400 font-semibold">完了率</div>
-                    <div className="text-gray-300">{progressPercentage}%</div>
+                    <div className="text-yellow-400 font-semibold">進捗率</div>
+                    <div className="text-gray-300">{progress?.percentage || 0}%</div>
+                  </div>
+                  <div className="bg-gray-700/30 rounded p-2">
+                    <div className="text-yellow-400 font-semibold">順番</div>
+                    <div className="text-gray-300">#{lesson.orderIndex}</div>
+                  </div>
+                  <div className="bg-gray-700/30 rounded p-2">
+                    <div className="text-yellow-400 font-semibold">ステータス</div>
+                    <div className="text-gray-300">{progress?.completed ? '完了' : '視聴中'}</div>
                   </div>
                 </div>
               </div>
@@ -409,5 +505,13 @@ export default function LessonPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function LessonPage() {
+  return (
+    <AuthGuard>
+      <LessonPageContent />
+    </AuthGuard>
   )
 }

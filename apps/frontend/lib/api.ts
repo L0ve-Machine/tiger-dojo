@@ -2,7 +2,7 @@ import axios from 'axios'
 
 // Create axios instance with base configuration
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000',
+  baseURL: '', // Use relative URLs with Next.js proxy
   timeout: 10000,
   withCredentials: true, // Important for cookies
 })
@@ -112,6 +112,13 @@ export const courseApi = {
   getUserProgress: (courseId?: string) => 
     api.get('/api/courses/user/progress', { params: { courseId } }),
 
+  // User lesson access
+  getUserLessons: (courseId?: string) => 
+    api.get('/api/courses/lessons', { params: { courseId } }),
+
+  getUserAvailableLessons: (courseId?: string) => 
+    api.get('/api/courses/lessons/available', { params: { courseId } }),
+
   // Admin course endpoints
   createCourse: (data: {
     title: string
@@ -170,14 +177,26 @@ export const dashboardApi = {
   getLeaderboard: () => api.get('/api/dashboard/leaderboard'),
 }
 
-// Create admin-specific axios instance without user authentication
+// Create admin-specific axios instance with authentication
 const adminApiClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL ? 
-    process.env.NEXT_PUBLIC_API_URL.replace(/\/api$/, '') : 
-    'http://localhost:5000',
+  baseURL: process.env.NODE_ENV === 'production' ? 'http://trade-dojo-fx.com' : '',
   timeout: 10000,
-  withCredentials: false, // Don't send auth cookies for admin-only endpoints
+  withCredentials: true, // Send auth cookies
 })
+
+// Add authorization header for admin requests
+adminApiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('accessToken')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
 
 // Admin API functions
 export const adminApi = {
@@ -232,12 +251,12 @@ export const adminApi = {
     slug?: string
     thumbnail?: string
     price?: number
-  }) => api.put(`/api/admin/courses/${courseId}`, data),
+  }) => adminApiClient.put(`/api/admin/courses/${courseId}`, data),
   
-  deleteAdminCourse: (courseId: string) => api.delete(`/api/admin/courses/${courseId}`),
+  deleteAdminCourse: (courseId: string) => adminApiClient.delete(`/api/admin/courses/${courseId}`),
   
   publishCourse: (courseId: string, isPublished: boolean) => 
-    api.put(`/api/admin/courses/${courseId}/publish`, { isPublished }),
+    adminApiClient.put(`/api/admin/courses/${courseId}/publish`, { isPublished }),
 
   // Lesson Management
   getAdminLessons: (courseId?: string) => 
@@ -257,9 +276,9 @@ export const adminApi = {
   }) => adminApiClient.post('/api/admin/lessons', data),
   
   updateAdminLesson: (lessonId: string, data: any) => 
-    api.put(`/api/admin/lessons/${lessonId}`, data),
+    adminApiClient.put(`/api/admin/lessons/${lessonId}`, data),
   
-  deleteAdminLesson: (lessonId: string) => api.delete(`/api/admin/lessons/${lessonId}`),
+  deleteAdminLesson: (lessonId: string) => adminApiClient.delete(`/api/admin/lessons/${lessonId}`),
 
   // Video Upload (Placeholder)
   uploadVideo: (data: FormData) => 
@@ -268,7 +287,7 @@ export const adminApi = {
     }),
   
   getUploadStatus: (uploadId: string) => 
-    api.get(`/api/admin/upload/video/${uploadId}/status`),
+    adminApiClient.get(`/api/admin/upload/video/${uploadId}/status`),
 
   // Chat Management
   getChatMessages: (params?: {
@@ -290,6 +309,13 @@ export const adminApi = {
   deleteChatRoom: (roomId: string) => 
     adminApiClient.delete(`/api/admin/chat/rooms/${roomId}`),
 
+  // Private Room Management
+  createPrivateRoom: (data: { name: string; accessKey: string; isPublic: boolean; maxMembers: number }) =>
+    adminApiClient.post('/api/private-rooms', data),
+  getPrivateRooms: () => adminApiClient.get('/api/private-rooms'),
+  joinPrivateRoom: (roomId: string, accessKey: string) =>
+    adminApiClient.post(`/api/private-rooms/${roomId}/join`, { accessKey }),
+
   // System Settings
   getSettings: () => adminApiClient.get('/api/admin/settings'),
   updateSettings: (data: any) => adminApiClient.put('/api/admin/settings', data),
@@ -297,6 +323,12 @@ export const adminApi = {
   // Admin Password Management
   changePassword: (data: { currentPassword: string; newPassword: string }) =>
     adminApiClient.post('/api/admin/change-password', data),
+}
+
+// Vimeo API functions
+export const vimeoApi = {
+  // Get video data via our proxy endpoint to avoid CORS issues
+  getVideoData: (videoUrl: string) => api.get('/api/vimeo/oembed', { params: { url: videoUrl } }),
 }
 
 // Generic API helper

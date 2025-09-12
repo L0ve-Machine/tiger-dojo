@@ -67,10 +67,10 @@ export default function Home() {
             
             <div className="space-y-6 text-xl text-gray-300 leading-relaxed mb-10">
               <p>
-                チャート解説動画／個別チャット対応／Zoomサポートで、
+                マンツーマン講習／講習講習／特別ラウンジ／個別チャット対応で、
               </p>
               <p className="text-yellow-400 font-medium">
-                "勝てる型"を一緒に作るオンライン学習コミュニティです。
+                "勝てる型"を一緒に作るFXオンライン学習コミュニティです。
               </p>
             </div>
           
@@ -92,7 +92,7 @@ export default function Home() {
             <div className="mt-12 flex items-center space-x-6 text-gray-400">
               <div className="flex items-center space-x-2">
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span>即時利用可能</span>
+                <span>即時入会可能</span>
               </div>
               <div className="flex items-center space-x-2">
                 <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
@@ -100,7 +100,7 @@ export default function Home() {
               </div>
               <div className="flex items-center space-x-2">
                 <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <span>個人技術向上</span>
+                <span>FX技術向上</span>
               </div>
             </div>
           </div>
@@ -126,7 +126,7 @@ export default function Home() {
               <span className="text-yellow-400"> 体系的に学ぶ</span>
             </h2>
             <p className="text-xl text-gray-300 max-w-4xl mx-auto">
-              チャート分析・相場環境認識・エントリータイミングを実践的に学ぶオンライン学習環境
+              チャート分析・相場環境認識・エントリータイミングを実践的に学ぶFXオンライン学習環境
             </p>
           </div>
           
@@ -160,7 +160,7 @@ export default function Home() {
                 <div className="w-12 h-12 bg-white/5 rounded-lg flex items-center justify-center mr-4">
                   <Play className="w-6 h-6 text-green-400" />
                 </div>
-                <h3 className="text-xl text-white">Zoom相談</h3>
+                <h3 className="text-xl text-white">オンライン相談</h3>
               </div>
               <p className="text-gray-300 leading-relaxed">
                 マンツーマンでのリアルタイム相談で、疑問をその場で解決できます。
@@ -222,7 +222,80 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+            {/* Free Plan */}
+            <Card 
+              className="relative overflow-hidden transition-all duration-300 hover:scale-105 hover:shadow-2xl flex flex-col h-full border-2 shadow-lg"
+              style={{
+                background: 'linear-gradient(135deg, #1a1b3a 0%, #0a0b1a 100%)',
+                borderColor: '#4a5568'
+              }}
+            >
+              <div className="absolute top-0 left-0 right-0">
+                <div 
+                  className="text-center py-2 text-sm text-white relative"
+                  style={{ background: 'linear-gradient(90deg, #4a5568, #2d3748)' }}
+                >
+                  お試しプラン
+                </div>
+              </div>
+
+              <CardHeader className="text-center pt-12">
+                <div className="flex items-center justify-center mb-4 p-3 rounded-full w-16 h-16 mx-auto bg-gray-600 text-white">
+                  <span className="text-2xl">🔰</span>
+                </div>
+                
+                <h3 className="text-2xl mb-2 text-white">フリープラン</h3>
+                
+                <div className="mb-4">
+                  <span className="text-4xl text-white">¥0</span>
+                  <span className="text-lg text-gray-300">/月</span>
+                </div>
+                
+                <p className="text-sm leading-relaxed text-gray-300">
+                  まずは先出しトレードおよびラウンジを体験
+                </p>
+              </CardHeader>
+
+              <CardContent className="flex-1 flex flex-col">
+                <ul className="space-y-3 mb-8 flex-1">
+                  <li className="flex items-start">
+                    <Check className="w-5 h-5 mr-3 mt-0.5 flex-shrink-0 text-green-500" />
+                    <span className="text-sm leading-relaxed text-gray-200">
+                      先出しLINE参加
+                    </span>
+                  </li>
+                  <li className="ml-8 text-xs text-gray-400">
+                    完全無料先出しルームに参加し、指定の口座開設でプロトレーダーの先出しLINEに参加
+                  </li>
+                  <li className="flex items-start">
+                    <Check className="w-5 h-5 mr-3 mt-0.5 flex-shrink-0 text-green-500" />
+                    <span className="text-sm leading-relaxed text-gray-200">
+                      トレード道場特別ラウンジ体験
+                    </span>
+                  </li>
+                  <li className="ml-8 text-xs text-gray-400">
+                    オンラインサロンに参加し、体験希望を伝えることで会員限定ラウンジをお試し体験（一人一回）
+                  </li>
+                </ul>
+                
+                <div className="space-y-3">
+                  <Button 
+                    className="w-full bg-gray-700 hover:bg-gray-600 text-white text-xs"
+                    onClick={() => window.open('https://line.me/ti/g2/9Pr6jxLGQOdaKuKY5eDLAOa3-p8zU5Ht8N1laA?utm_source=invitation&utm_medium=link_copy&utm_campaign=default', '_blank')}
+                  >
+                    完全無料先出しルームはこちら
+                  </Button>
+                  <Button 
+                    className="w-full bg-gray-700 hover:bg-gray-600 text-white text-xs"
+                    onClick={() => window.open('https://discord.gg/f3vr94Qhqr', '_blank')}
+                  >
+                    トレード道場特別ラウンジ体験はこちら
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Standard Plan */}
             <Card 
               className="relative overflow-hidden transition-all duration-300 hover:scale-105 hover:shadow-2xl flex flex-col h-full border-2 shadow-lg"
@@ -236,7 +309,7 @@ export default function Home() {
                   className="text-center py-2 text-sm text-white relative"
                   style={{ background: 'linear-gradient(90deg, #d4af37, #e6c547)' }}
                 >
-                  人気プラン
+                  エントリープラン
                 </div>
               </div>
 
@@ -253,7 +326,7 @@ export default function Home() {
                 </div>
                 
                 <p className="text-sm leading-relaxed text-gray-300">
-                  基礎から学び、実践力を身につける
+                  サロン参加でトレードの基礎を学ぶ
                 </p>
               </CardHeader>
 
@@ -291,15 +364,23 @@ export default function Home() {
                   </li>
                 </ul>
 
-                <Button 
-                  onClick={() => window.open('https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-8PD885481X888505ENAAKQAQ', '_blank')}
-                  className="w-full py-3 transition-all duration-300 mt-auto text-black border-2 hover:bg-yellow-500 rounded-lg font-bold"
-                  style={{
-                    background: 'linear-gradient(135deg, #d4af37, #e6c547)'
-                  }}
-                >
-                  今すぐ申し込む
-                </Button>
+                <div className="space-y-3">
+                  <Button 
+                    onClick={() => window.open('https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-8PD885481X888505ENAAKQAQ', '_blank')}
+                    className="w-full py-3 transition-all duration-300 text-black border-2 hover:bg-yellow-500 rounded-lg font-bold"
+                    style={{
+                      background: 'linear-gradient(135deg, #d4af37, #e6c547)'
+                    }}
+                  >
+                    今すぐ申し込む
+                  </Button>
+                  <Button
+                    onClick={() => window.open('https://discord.gg/f3vr94Qhqr', '_blank')}
+                    className="w-full py-2 bg-transparent border border-yellow-500 text-yellow-500 hover:bg-yellow-500/10 rounded-lg text-sm"
+                  >
+                    申込済会員はこちら（Discord）
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 
@@ -319,7 +400,7 @@ export default function Home() {
                     color: '#d4af37'
                   }}
                 >
-                  最上位プラン
+                  人気プラン
                 </div>
               </div>
 
@@ -369,7 +450,7 @@ export default function Home() {
                   <li className="flex items-start">
                     <Check className="w-5 h-5 mr-3 mt-0.5 flex-shrink-0 text-gray-800" />
                     <span className="text-sm leading-relaxed text-gray-800">
-                      月2回の動画講義配信
+                      月2回の講習講義配信
                     </span>
                   </li>
                   <li className="flex items-start">
@@ -404,15 +485,23 @@ export default function Home() {
                   </li>
                 </ul>
 
-                <Button 
-                  onClick={() => window.open('https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-6NX871965X4205206NAAKOJI', '_blank')}
-                  className="w-full py-3 transition-all duration-300 mt-auto bg-gray-900 text-yellow-500 hover:bg-gray-800 rounded-lg font-bold text-center border-2 border-gray-900"
-                  style={{
-                    background: '#1f2937'
-                  }}
-                >
-                  今すぐ申し込む
-                </Button>
+                <div className="space-y-3">
+                  <Button 
+                    onClick={() => window.open('https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-6NX871965X4205206NAAKOJI', '_blank')}
+                    className="w-full py-3 transition-all duration-300 bg-gray-900 text-yellow-500 hover:bg-gray-800 rounded-lg font-bold text-center border-2 border-gray-900"
+                    style={{
+                      background: '#1f2937'
+                    }}
+                  >
+                    今すぐ申し込む
+                  </Button>
+                  <Button
+                    onClick={() => window.open('https://discord.gg/f3vr94Qhqr', '_blank')}
+                    className="w-full py-2 bg-transparent border border-gray-900 text-gray-900 hover:bg-gray-900/10 rounded-lg text-sm"
+                  >
+                    申込済会員はこちら（Discord）
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -422,11 +511,32 @@ export default function Home() {
               ※ 銀行振り込みも対応しておりますが、個別相談者限定としております
             </p>
             <p className="text-gray-400 text-sm mt-2">
-              ※ Premiumプランの枠は空き次第Standardプランの方から優先案内となります
+              ※ プレミアムプランが満員の場合、スタンダードプランの方から優先案内となります
+            </p>
+            <p className="text-gray-400 text-sm mt-2">
+              ※ プレミアムプラン申し込み後に会員登録してください（未入会者は登録不可）
             </p>
             <p className="text-gray-400 text-sm mt-2">
               ※ プランのグレードアップは可能ですが、グレードを下げることはできません
             </p>
+          </div>
+
+          <div className="text-center mt-12">
+            <p className="text-gray-400 mb-6">
+              ご不明な点がございましたら、お気軽にお問い合わせください
+            </p>
+            <div className="flex justify-center">
+              <a
+                href="https://lin.ee/EzJAtsw"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2 bg-green-600/20 text-green-300 hover:bg-green-600/30 rounded-lg transition-all font-medium"
+              >
+                <MessageCircle className="w-5 h-5" />
+                麻生個人LINE
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            </div>
           </div>
 
           <div className="text-center mt-12">
@@ -460,6 +570,7 @@ export default function Home() {
             </p>
 
             {/* Social Links */}
+            <p className="text-gray-400 mb-4">各種SNSはこちら</p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 mb-8">
               <a
                 href="https://youtube.com/@aso_trade_infx?si=Szeu_8dcrATZ--0U"
@@ -478,7 +589,7 @@ export default function Home() {
                 className="flex items-center gap-2 px-4 py-2 bg-green-500/20 text-green-300 hover:bg-green-500/30 rounded-lg transition-all font-medium"
               >
                 <MessageCircle className="w-5 h-5" />
-                LINE
+                完全無料先出しLINE
                 <ExternalLink className="w-4 h-4" />
               </a>
               <a
@@ -488,6 +599,7 @@ export default function Home() {
                 className="flex items-center gap-2 px-4 py-2 bg-gray-700/50 text-gray-300 hover:bg-gray-700/70 rounded-lg transition-all font-medium"
               >
                 <span className="text-xl font-bold">𝕏</span>
+                麻生賢吾Xアカウント
                 <ExternalLink className="w-4 h-4" />
               </a>
             </div>
@@ -495,7 +607,9 @@ export default function Home() {
           
           <div className="pt-8 border-t border-white/10 text-center">
             <p className="text-gray-400">
-              © 2025 FXサロン「TRADE DOJO」. All rights reserved. | プライバシーポリシー | 利用規約
+              © 2025 FXサロン「TRADE DOJO」. All rights reserved. | 
+              <Link href="/privacy" className="hover:text-white transition">プライバシーポリシー</Link> | 
+              <Link href="/terms" className="hover:text-white transition">利用規約</Link>
             </p>
           </div>
         </div>

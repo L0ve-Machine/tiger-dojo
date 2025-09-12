@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/auth-store'
 import { useSocketStore } from '@/lib/socket'
 import { authApi } from '@/lib/api'
-import { Send, Users, Hash, AtSign, Settings, Plus, Search, Mic, Menu, X, AlertTriangle, Loader2 } from 'lucide-react'
+import { Send, Users, Hash, AtSign, Settings, Plus, Search, Mic, Menu, X, AlertTriangle, Loader2, RefreshCw, Lock, UserPlus, Key } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -51,19 +51,14 @@ export default function ChatPage() {
     getDmMessages
   } = useSocketStore()
 
-  const [selectedChannel, setSelectedChannel] = useState<string>('general')
+  const [selectedChannel, setSelectedChannel] = useState<string>('')
   const [messageInput, setMessageInput] = useState('')
   const [isTyping, setIsTyping] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showUsersSidebar, setShowUsersSidebar] = useState(false)
   const [showChannelModal, setShowChannelModal] = useState(false)
   const [showProfileModal, setShowProfileModal] = useState(false)
-  const [channels, setChannels] = useState<Channel[]>([
-    { id: 'general', name: 'general', type: 'text' as const, description: '一般的な議論' },
-    { id: 'announcements', name: 'announcements', type: 'text' as const, description: '重要なお知らせ' },
-    { id: 'questions', name: 'questions', type: 'text' as const, description: '質問と回答' },
-    { id: 'resources', name: 'resources', type: 'text' as const, description: 'リソース共有' },
-  ])
+  const [channels, setChannels] = useState<Channel[]>([])
   const [newChannelName, setNewChannelName] = useState('')
   const [newChannelDescription, setNewChannelDescription] = useState('')
   const [dmUsers, setDmUsers] = useState<{id: string, name: string, unread?: number}[]>([])
@@ -84,6 +79,28 @@ export default function ChatPage() {
   const [lastPongTime, setLastPongTime] = useState(Date.now())
   const [playNotificationSound, setPlayNotificationSound] = useState(false)
   const [newUserName, setNewUserName] = useState('')
+  const [showPrivateRoomModal, setShowPrivateRoomModal] = useState(false)
+  const [showJoinRoomModal, setShowJoinRoomModal] = useState(false)
+  const [privateRooms, setPrivateRooms] = useState([])
+  const [newRoomName, setNewRoomName] = useState('')
+  const [newRoomDescription, setNewRoomDescription] = useState('')
+  const [newRoomAccessKey, setNewRoomAccessKey] = useState('')
+  const [isPublicRoom, setIsPublicRoom] = useState(false)
+  const [joinRoomSlug, setJoinRoomSlug] = useState('')
+  const [joinRoomAccessKey, setJoinRoomAccessKey] = useState('')
+  
+  // Password prompt modal states
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [passwordPromptRoom, setPasswordPromptRoom] = useState<{id: string, name: string, slug?: string} | null>(null)
+  const [roomPassword, setRoomPassword] = useState('')
+  const [authenticatedRooms, setAuthenticatedRooms] = useState<Set<string>>(() => {
+    // Load authenticated rooms from localStorage on initialization
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('authenticatedRooms')
+      return stored ? new Set(JSON.parse(stored)) : new Set()
+    }
+    return new Set()
+  })
   
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -110,10 +127,74 @@ export default function ChatPage() {
     }
   }, [messages, playNotificationSound])
 
+  // Fetch chat rooms from API
+  const fetchChatRooms = async () => {
+    try {
+      console.log('Fetching chat rooms...')
+      // Use relative URL to go through nginx proxy
+      const response = await fetch('/api/admin/chat/rooms')
+      const data = await response.json()
+      
+      console.log('Chat rooms response:', data)
+      
+      if (data.success && data.rooms && data.rooms.length > 0) {
+        const formattedChannels = data.rooms.map((room: any) => ({
+          id: room.type === 'private' ? room.id : room.slug, // Use database ID for private rooms, slug for course rooms
+          name: room.title,
+          slug: room.slug, // Store the actual database slug  
+          roomId: room.id, // Store the actual database ID
+          roomType: room.type, // Store the room type (private/course)
+          type: 'text' as const,
+          description: room.description || 'チャットルーム'
+        }))
+        
+        console.log('Formatted channels:', formattedChannels)
+        setChannels(formattedChannels)
+        
+        // Set default channel if not selected (avoid locked channels)
+        if (!selectedChannel && formattedChannels.length > 0) {
+          const defaultChannel = formattedChannels.find((ch: any) => ch.id === 'general') || 
+                                  formattedChannels.find((ch: any) => !ch.id.startsWith('🔒')) || 
+                                  formattedChannels[0]
+          setSelectedChannel(defaultChannel.id)
+        }
+      } else {
+        console.log('No rooms found or API error, using fallback')
+        // Fallback to default channels if no rooms or API fails
+        const fallbackChannels = [
+          { id: 'general', name: 'General', type: 'text' as const, description: '一般的な雑談や質問のためのチャットルーム' },
+          { id: 'announcements', name: 'Announcements', type: 'text' as const, description: '重要なお知らせや発表のためのチャットルーム' },
+          { id: 'questions', name: 'Questions', type: 'text' as const, description: '学習に関する質問や疑問のためのチャットルーム' },
+          { id: 'resources', name: 'Resources', type: 'text' as const, description: '有益な資料やリンクの共有のためのチャットルーム' }
+        ]
+        setChannels(fallbackChannels)
+        if (!selectedChannel) {
+          setSelectedChannel('general')
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch chat rooms:', error)
+      // Fallback to default channels if API fails
+      const fallbackChannels = [
+        { id: 'general', name: 'General', type: 'text' as const, description: '一般的な雑談や質問のためのチャットルーム' },
+        { id: 'announcements', name: 'Announcements', type: 'text' as const, description: '重要なお知らせや発表のためのチャットルーム' },
+        { id: 'questions', name: 'Questions', type: 'text' as const, description: '学習に関する質問や疑問のためのチャットルーム' },
+        { id: 'resources', name: 'Resources', type: 'text' as const, description: '有益な資料やリンクの共有のためのチャットルーム' }
+      ]
+      setChannels(fallbackChannels)
+      if (!selectedChannel) {
+        setSelectedChannel('general')
+      }
+    }
+  }
+
   // Check authentication
   useEffect(() => {
     if (!isAuthenticated) {
       router.push('/auth/login')
+    } else {
+      // Fetch chat rooms when authenticated
+      fetchChatRooms()
     }
   }, [isAuthenticated, router])
 
@@ -204,6 +285,17 @@ export default function ChatPage() {
     return { isValid: true }
   }, [])
 
+  // Handle mention detection
+  const processMentions = (text: string): string => {
+    return text.replace(/@([a-zA-Z0-9_]+)/g, (match, username) => {
+      const mentionedUser = roomOnlineUsers.find(u => u.userName.toLowerCase() === username.toLowerCase())
+      if (mentionedUser) {
+        return `<span class="bg-yellow-400/20 text-yellow-400 px-1 rounded font-semibold">${match}</span>`
+      }
+      return match
+    })
+  }
+
   // Handle typing indicator with error handling
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
@@ -286,12 +378,38 @@ export default function ChatPage() {
     return format(new Date(date), 'HH:mm')
   }
 
-  const handleChannelChange = (channelId: string) => {
+  const handleChannelChange = async (channelId: string) => {
+    // Check if it's a locked room that hasn't been authenticated
+    const isLocked = channelId.startsWith('🔒')
+    const roomName = isLocked ? channelId.substring(2).trim() : channelId
+    
+    if (isLocked && !authenticatedRooms.has(channelId)) {
+      // Find the room data to get the actual slug
+      const roomData = channels.find(ch => ch.id === channelId)
+      
+      // Show password prompt
+      setPasswordPromptRoom({ 
+        id: channelId, 
+        name: roomName, 
+        slug: roomData?.slug // Get the slug from room data
+      })
+      setShowPasswordModal(true)
+      return
+    }
+    
     setSelectedChannel(channelId)
     setSelectedDmUser(null)
     if (isConnected) {
-      // Join specific channel room
-      joinChannel(channelId)
+      // Find the actual channel data to get the proper slug/ID
+      const targetChannel = channels.find(ch => ch.id === channelId)
+      if (targetChannel) {
+        // For private rooms (locked), use the slug; for course rooms, use the slug
+        const actualRoomId = targetChannel.slug || channelId
+        console.log('Joining channel with actual ID:', actualRoomId, 'from channel:', targetChannel)
+        joinChannel(actualRoomId)
+      } else {
+        joinChannel(channelId)
+      }
     }
   }
 
@@ -315,8 +433,8 @@ export default function ChatPage() {
     }
     
     // Check for duplicate channel names
-    const channelId = newChannelName.toLowerCase().replace(/\s+/g, '-')
-    if (channels.some(ch => ch.id === channelId)) {
+    const channelSlug = newChannelName.toLowerCase().replace(/\s+/g, '-')
+    if (channels.some(ch => ch.id === channelSlug)) {
       setError({ message: '同名のチャンネルが既に存在します', type: 'warning' })
       return
     }
@@ -325,17 +443,28 @@ export default function ChatPage() {
     setError(null)
     
     try {
-      const newChannel: Channel = {
-        id: channelId,
-        name: sanitizeMessage(newChannelName.trim()),
-        type: 'text' as const,
-        description: sanitizeMessage(newChannelDescription.trim()) || 'No description'
-      }
+      const response = await fetch('/api/admin/chat/rooms', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: newChannelName.trim(),
+          slug: channelSlug
+        })
+      })
       
-      setChannels([...channels, newChannel])
-      setNewChannelName('')
-      setNewChannelDescription('')
-      setShowChannelModal(false)
+      const data = await response.json()
+      
+      if (data.success) {
+        // Refresh channels list
+        await fetchChatRooms()
+        setNewChannelName('')
+        setNewChannelDescription('')
+        setShowChannelModal(false)
+      } else {
+        setError({ message: data.error || 'チャンネルの作成に失敗しました', type: 'error' })
+      }
     } catch (err) {
       setError({ message: 'チャンネルの作成に失敗しました', type: 'error' })
     } finally {
@@ -349,21 +478,51 @@ export default function ChatPage() {
       return
     }
     
-    if (channelId === 'general') {
-      setError({ message: 'generalチャンネルは削除できません', type: 'warning' })
-      return
-    }
-    
     setLoadingStates(prev => ({ ...prev, deletingChannel: true }))
     setError(null)
     
     try {
-      setChannels(channels.filter(ch => ch.id !== channelId))
-      if (selectedChannel === channelId) {
-        setSelectedChannel('general')
-        handleChannelChange('general')
+      // Find the room ID from channels
+      const channelToDelete = channels.find(ch => ch.id === channelId)
+      if (!channelToDelete) {
+        setError({ message: 'チャンネルが見つかりません', type: 'error' })
+        return
       }
-      setShowDeleteConfirm({ show: false, channelId: '', channelName: '' })
+      
+      // Fetch rooms to get the actual room ID
+      const roomsResponse = await fetch('/api/admin/chat/rooms')
+      const roomsData = await roomsResponse.json()
+      
+      if (roomsData.success && roomsData.rooms) {
+        const room = roomsData.rooms.find((r: any) => r.slug === channelId)
+        
+        if (room) {
+          const response = await fetch(`/api/admin/chat/rooms/${room.id}`, {
+            method: 'DELETE'
+          })
+          
+          const data = await response.json()
+          
+          if (data.success) {
+            // Refresh channels list
+            await fetchChatRooms()
+            
+            if (selectedChannel === channelId) {
+              // Select first available channel
+              const firstChannel = channels.filter(ch => ch.id !== channelId)[0]
+              if (firstChannel) {
+                setSelectedChannel(firstChannel.id)
+                handleChannelChange(firstChannel.id)
+              }
+            }
+            setShowDeleteConfirm({ show: false, channelId: '', channelName: '' })
+          } else {
+            setError({ message: data.error || 'チャンネルの削除に失敗しました', type: 'error' })
+          }
+        } else {
+          setError({ message: 'チャンネルが見つかりません', type: 'error' })
+        }
+      }
     } catch (err) {
       setError({ message: 'チャンネルの削除に失敗しました', type: 'error' })
     } finally {
@@ -407,6 +566,61 @@ export default function ChatPage() {
     }
   }
 
+  const handleRoomPasswordSubmit = async () => {
+    if (!passwordPromptRoom || !roomPassword.trim()) {
+      setError({ message: 'パスワードを入力してください', type: 'warning' })
+      return
+    }
+
+    setLoadingStates(prev => ({ ...prev, sendingMessage: true }))
+    setError(null)
+
+    try {
+      // For now, we'll use a simple approach since we're using the visual indicator
+      // Later this should verify with the backend
+      const response = await fetch(`/api/private-rooms/verify-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomSlug: passwordPromptRoom.slug || passwordPromptRoom.name.toLowerCase().replace(/\s+/g, '-'),
+          password: roomPassword
+        })
+      })
+
+      if (response.ok) {
+        // Add to authenticated rooms
+        const newAuthenticatedRooms = new Set([...authenticatedRooms, passwordPromptRoom.id])
+        setAuthenticatedRooms(newAuthenticatedRooms)
+        
+        // Save to localStorage for persistence
+        localStorage.setItem('authenticatedRooms', JSON.stringify([...newAuthenticatedRooms]))
+        
+        // Join the room
+        setSelectedChannel(passwordPromptRoom.id)
+        setSelectedDmUser(null)
+        if (isConnected) {
+          // Use the actual room slug for socket connection
+          const roomSlug = passwordPromptRoom.slug || passwordPromptRoom.name.toLowerCase().replace(/\s+/g, '-')
+          joinChannel(passwordPromptRoom.id) // Use the channel ID (with lock emoji) for frontend display
+        }
+        
+        // Close modal and reset state
+        setShowPasswordModal(false)
+        setPasswordPromptRoom(null)
+        setRoomPassword('')
+        setError({ message: 'ルームに参加しました', type: 'info' })
+      } else {
+        const data = await response.json()
+        setError({ message: data.error || 'パスワードが正しくありません', type: 'error' })
+      }
+    } catch (err) {
+      console.error('Password verification error:', err)
+      setError({ message: 'パスワードの確認に失敗しました', type: 'error' })
+    } finally {
+      setLoadingStates(prev => ({ ...prev, sendingMessage: false }))
+    }
+  }
+
   const handleStartDM = async (dmUserId: string) => {
     if (!user?.id) {
       setError({ message: 'ユーザー情報が取得できません', type: 'error' })
@@ -436,8 +650,13 @@ export default function ChatPage() {
       if (showProfileModal) setShowProfileModal(false)
       if (showDeleteConfirm.show) setShowDeleteConfirm({ show: false, channelId: '', channelName: '' })
       if (showUsersSidebar) setShowUsersSidebar(false)
+      if (showPasswordModal) {
+        setShowPasswordModal(false)
+        setPasswordPromptRoom(null)
+        setRoomPassword('')
+      }
     }
-  }, [showChannelModal, showProfileModal, showDeleteConfirm.show, showUsersSidebar])
+  }, [showChannelModal, showProfileModal, showDeleteConfirm.show, showUsersSidebar, showPasswordModal])
   
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown)
@@ -448,6 +667,7 @@ export default function ChatPage() {
   const channelModalRef = useRef<HTMLDivElement>(null)
   const profileModalRef = useRef<HTMLDivElement>(null)
   const deleteConfirmRef = useRef<HTMLDivElement>(null)
+  const passwordModalRef = useRef<HTMLDivElement>(null)
   
   useEffect(() => {
     if (showChannelModal) {
@@ -466,6 +686,12 @@ export default function ChatPage() {
       deleteConfirmRef.current?.focus()
     }
   }, [showDeleteConfirm.show])
+  
+  useEffect(() => {
+    if (showPasswordModal) {
+      passwordModalRef.current?.focus()
+    }
+  }, [showPasswordModal])
   
   // Error dismissal timer
   useEffect(() => {
@@ -535,15 +761,24 @@ export default function ChatPage() {
           <div className="px-3 py-4">
             <div className="flex items-center justify-between px-2 mb-3">
               <span className="text-xs uppercase font-semibold text-gray-400 tracking-wide">テキストチャンネル</span>
-              {isAdmin && (
+              <div className="flex items-center gap-1">
                 <button 
-                  onClick={() => setShowChannelModal(true)}
+                  onClick={fetchChatRooms}
                   className="text-gray-500 hover:text-yellow-400 p-1 hover:bg-yellow-400/10 rounded transition"
-                  title="チャンネルを追加"
+                  title="チャンネルを更新"
                 >
-                  <Plus className="w-4 h-4" />
+                  <RefreshCw className="w-4 h-4" />
                 </button>
-              )}
+                {isAdmin && (
+                  <button 
+                    onClick={() => setShowChannelModal(true)}
+                    className="text-gray-500 hover:text-yellow-400 p-1 hover:bg-yellow-400/10 rounded transition"
+                    title="チャンネルを追加"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
             
             {channels.map(channel => (
@@ -809,7 +1044,7 @@ export default function ChatPage() {
                       {message.type === 'QUESTION' && (
                         <span className="text-blue-400 font-semibold mr-1">❓</span>
                       )}
-                      <span className="break-words" dangerouslySetInnerHTML={{ __html: message.content }}></span>
+                      <span className="break-words" dangerouslySetInnerHTML={{ __html: processMentions(message.content) }}></span>
                     </div>
                   </div>
                 </div>
@@ -872,8 +1107,8 @@ export default function ChatPage() {
                 value={messageInput}
                 onChange={handleInputChange}
                 placeholder={selectedDmUser ? 
-                  `${roomOnlineUsers.find(u => u.userId === selectedDmUser)?.userName}にメッセージを送信...` 
-                  : `#${selectedChannel} にメッセージを送信...`
+                  `${roomOnlineUsers.find(u => u.userId === selectedDmUser)?.userName}にメッセージを送信... (@ユーザー名 でメンション)` 
+                  : `#${selectedChannel} にメッセージを送信... (@ユーザー名 でメンション)`
                 }
                 className="w-full bg-gray-800 border border-gray-600 text-white px-3 md:px-4 py-2 md:py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-amber-500 transition shadow-sm text-sm md:text-base pr-12"
                 disabled={!isConnected || loadingStates.sendingMessage}
@@ -882,6 +1117,38 @@ export default function ChatPage() {
               <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-gray-500">
                 {messageInput.length}/1000
               </div>
+              
+              {/* Mention suggestions */}
+              {messageInput.includes('@') && messageInput.split('@').pop() && (
+                <div className="absolute bottom-full mb-2 left-0 right-0 bg-gray-800 border border-gray-600 rounded-lg shadow-lg max-h-32 overflow-y-auto z-10">
+                  {roomOnlineUsers
+                    .filter(onlineUser => 
+                      onlineUser.userName.toLowerCase().includes(messageInput.split('@').pop()!.toLowerCase()) &&
+                      onlineUser.userId !== user?.id
+                    )
+                    .slice(0, 5)
+                    .map(mentionUser => (
+                      <button
+                        key={mentionUser.userId}
+                        onClick={() => {
+                          const parts = messageInput.split('@')
+                          parts[parts.length - 1] = mentionUser.userName + ' '
+                          setMessageInput(parts.join('@'))
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-gray-700 flex items-center gap-2 text-sm"
+                      >
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-yellow-400 to-amber-600 flex items-center justify-center text-white text-xs font-bold">
+                          {mentionUser.userName.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="text-white">{mentionUser.userName}</span>
+                        {mentionUser.userRole === 'INSTRUCTOR' && (
+                          <span className="text-xs bg-yellow-400/20 text-yellow-400 px-1.5 py-0.5 rounded">講師</span>
+                        )}
+                      </button>
+                    ))
+                  }
+                </div>
+              )}
             </div>
             <button
               type="submit"
@@ -1106,6 +1373,80 @@ export default function ChatPage() {
               )}
             </button>
           </div>
+        </div>
+      </div>
+    )}
+
+    {/* Room Password Modal */}
+    {showPasswordModal && passwordPromptRoom && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div 
+          ref={passwordModalRef}
+          tabIndex={-1}
+          className="bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-700 focus:outline-none"
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <Lock className="w-6 h-6 text-yellow-400" />
+            <h3 className="text-white font-bold text-lg">鍵付きルームのパスワード</h3>
+          </div>
+          
+          <p className="text-gray-300 mb-6">
+            「{passwordPromptRoom.name}」に参加するにはパスワードが必要です。
+          </p>
+          
+          <form onSubmit={(e) => {
+            e.preventDefault()
+            handleRoomPasswordSubmit()
+          }}>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  パスワード
+                </label>
+                <input
+                  type="password"
+                  value={roomPassword}
+                  onChange={(e) => setRoomPassword(e.target.value)}
+                  placeholder="パスワードを入力してください"
+                  className="w-full bg-gray-700 border border-gray-600 text-black px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-amber-500"
+                  autoFocus
+                  required
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPasswordModal(false)
+                  setPasswordPromptRoom(null)
+                  setRoomPassword('')
+                }}
+                disabled={loadingStates.sendingMessage}
+                className="flex-1 px-4 py-2 text-gray-400 hover:text-white border border-gray-600 hover:border-gray-500 rounded-lg transition disabled:opacity-50"
+              >
+                キャンセル
+              </button>
+              <button
+                type="submit"
+                disabled={!roomPassword.trim() || loadingStates.sendingMessage}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-yellow-400 to-amber-600 text-white rounded-lg hover:from-yellow-500 hover:to-amber-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loadingStates.sendingMessage ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    確認中...
+                  </>
+                ) : (
+                  <>
+                    <Key className="w-4 h-4" />
+                    参加
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     )}

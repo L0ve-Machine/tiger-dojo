@@ -44,7 +44,7 @@ interface SocketState {
   // Actions
   connect: (token: string) => void
   disconnect: () => void
-  joinRoom: (roomType: 'lesson' | 'course' | 'dm', roomId: string) => void
+  joinRoom: (roomType: 'lesson' | 'course' | 'dm' | 'private', roomId: string) => void
   joinChannel: (channelId: string) => void
   leaveRoom: () => void
   sendMessage: (content: string, type?: ChatMessage['type']) => void
@@ -70,7 +70,8 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     const state = get()
     if (state.socket?.connected) return
 
-    const socketUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:5000'
+    // Use current domain to connect via nginx proxy
+    const socketUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
     const socket = io(socketUrl, {
       auth: { token },
       transports: ['websocket', 'polling'],
@@ -233,7 +234,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     })
   },
 
-  joinRoom: (roomType: 'lesson' | 'course' | 'dm', roomId: string) => {
+  joinRoom: (roomType: 'lesson' | 'course' | 'dm' | 'private', roomId: string) => {
     const { socket, currentRoom, messagesByChannel } = get()
     
     console.log('Joining room:', roomId, 'type:', roomType)
@@ -310,19 +311,32 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     }
   },
 
-  joinChannel: (channelId: string) => {
-    const { socket, currentRoom } = get()
+  joinChannel: (channelId: string, channelData?: any) => {
+    const { socket, currentRoom, messagesByChannel } = get()
     
     // Leave current room if in one
     if (currentRoom) {
       socket?.emit('leave_room', currentRoom)
     }
     
-    // Clear typing for room switching
-    set({ typingUsers: new Set() })
+    // Clear typing for room switching and load messages for new room
+    const existingMessages = messagesByChannel[channelId] || []
+    console.log('Loading existing messages for channel:', channelId, 'count:', existingMessages.length)
     
-    // Join the specific channel room - use channel ID directly as room ID
-    socket?.emit('join_room', { roomType: 'course', roomId: channelId })
+    set({ 
+      typingUsers: new Set(),
+      messages: existingMessages
+    })
+    
+    // Use the channelId as the roomId directly
+    // channelId should now be the actual database slug/ID
+    const roomId = channelId
+    
+    // Default to course type if not specified
+    const roomType = channelData?.roomType || 'course'
+    
+    console.log('Joining channel with roomType:', roomType, 'roomId:', roomId, 'channelData:', channelData)
+    socket?.emit('join_room', { roomType, roomId })
     
     set({ currentChannel: channelId })
   },

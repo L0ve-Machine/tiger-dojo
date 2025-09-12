@@ -45,13 +45,18 @@ export default function ApprovalRegistrationForm() {
         discordName: formData.discordName || undefined
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
+      console.log('API URL:', process.env.NEXT_PUBLIC_API_URL)
+      console.log('Registration URL (direct):', `${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`)
+      console.log('Registration URL (proxy):', `/api/auth/register`)
+
+      // Try proxy first, fallback to direct if needed
+      const response = await fetch(`/api/auth/register`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/x-www-form-urlencoded'
         },
         credentials: 'include',
-        body: JSON.stringify(registrationData)
+        body: new URLSearchParams(registrationData as Record<string, string>).toString()
       })
 
       const data = await response.json()
@@ -124,7 +129,7 @@ export default function ApprovalRegistrationForm() {
             />
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">新規登録</h1>
-          <p className="text-gray-300">FX Tiger Dojoで"勝てる型"を身に付けましょう</p>
+          <p className="text-gray-300">FXトレード道場で"勝てる型"を身に付けましょう</p>
         </div>
 
         <div className="bg-black/40 backdrop-blur-sm rounded-2xl border border-white/10 shadow-xl p-8">
@@ -150,7 +155,7 @@ export default function ApprovalRegistrationForm() {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="山田太郎"
-                  className="bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-yellow-400 focus:ring-yellow-400/20"
+                  className="bg-gray-800/50 border-gray-600 text-black placeholder:text-gray-400 focus:border-yellow-400 focus:ring-yellow-400/20"
                 />
               </div>
 
@@ -165,7 +170,7 @@ export default function ApprovalRegistrationForm() {
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="your-email@example.com"
-                  className="bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-yellow-400 focus:ring-yellow-400/20"
+                  className="bg-gray-800/50 border-gray-600 text-black placeholder:text-gray-400 focus:border-yellow-400 focus:ring-yellow-400/20"
                 />
               </div>
             </div>
@@ -182,7 +187,7 @@ export default function ApprovalRegistrationForm() {
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   placeholder="8文字以上"
-                  className="bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-yellow-400 focus:ring-yellow-400/20"
+                  className="bg-gray-800/50 border-gray-600 text-black placeholder:text-gray-400 focus:border-yellow-400 focus:ring-yellow-400/20"
                 />
               </div>
 
@@ -197,7 +202,7 @@ export default function ApprovalRegistrationForm() {
                   value={formData.passwordConfirmation}
                   onChange={(e) => setFormData({ ...formData, passwordConfirmation: e.target.value })}
                   placeholder="パスワードを再入力"
-                  className="bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-yellow-400 focus:ring-yellow-400/20"
+                  className="bg-gray-800/50 border-gray-600 text-black placeholder:text-gray-400 focus:border-yellow-400 focus:ring-yellow-400/20"
                 />
               </div>
             </div>
@@ -210,7 +215,7 @@ export default function ApprovalRegistrationForm() {
                 value={formData.discordName}
                 onChange={(e) => setFormData({ ...formData, discordName: e.target.value })}
                 placeholder="Discord#1234"
-                className="bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-yellow-400 focus:ring-yellow-400/20"
+                className="bg-gray-800/50 border-gray-600 text-black placeholder:text-gray-400 focus:border-yellow-400 focus:ring-yellow-400/20"
               />
             </div>
 

@@ -51,10 +51,23 @@ export default function PricingPlans() {
       try {
         const mockPlans: PricingPlan[] = [
           {
+            id: 'free',
+            name: "フリープラン",
+            price: "¥0",
+            description: "まずは先出しトレードおよびラウンジを体験",
+            icon: <span className="text-2xl">🔰</span>,
+            popular: false,
+            isActive: true,
+            features: [
+              { text: "先出しLINE参加", included: true },
+              { text: "トレード道場特別ラウンジ体験", included: true },
+            ]
+          },
+          {
             id: 'standard',
             name: "スタンダードプラン",
             price: "¥15,000",
-            description: "基礎から学び、実践力を身につける",
+            description: "サロン参加でトレードの基礎を学ぶ",
             icon: <Star className="w-6 h-6" />,
             popular: true,
             isActive: true,
@@ -70,7 +83,7 @@ export default function PricingPlans() {
             id: 'premium',
             name: "プレミアムプラン",
             price: "¥40,000",
-            description: "プロレベルの実践力を身につける最上位プラン",
+            description: "プロの指導により一人で勝てるスキルを身に付ける",
             icon: <Crown className="w-6 h-6" />,
             premium: true,
             isActive: true,
@@ -79,7 +92,7 @@ export default function PricingPlans() {
               { text: "ライブトレード＆質問会（フル参加）", included: true },
               { text: "定期通貨分析", included: true },
               { text: "特別ラウンジ（フル参加）", included: true },
-              { text: "月2回の動画講義配信", included: true },
+              { text: "月2回の講習講義配信", included: true },
               { text: "トレード管理表配布と添削", included: true },
               { text: "DMによるトレードの質問", included: true },
               { text: "月1回のトレード振り返り講習（50分）", included: true },
@@ -163,7 +176,7 @@ export default function PricingPlans() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
           {plans.map((plan, index) => {
             const isSubscribing = subscribingPlanId === plan.id
             const isDisabled = !plan.isActive
@@ -191,13 +204,24 @@ export default function PricingPlans() {
                       : '#3a3f5a'
                 }}
               >
+                {plan.id === 'free' && (
+                  <div className="absolute top-0 left-0 right-0">
+                    <div 
+                      className="text-center py-2 text-sm text-white relative"
+                      style={{ background: 'linear-gradient(90deg, #4a5568, #2d3748)' }}
+                    >
+                      お試しプラン
+                    </div>
+                  </div>
+                )}
+
                 {plan.popular && (
                   <div className="absolute top-0 left-0 right-0">
                     <div 
                       className="text-center py-2 text-sm text-white relative"
                       style={{ background: 'linear-gradient(90deg, #d4af37, #e6c547)' }}
                     >
-                      人気プラン
+                      エントリープラン
                     </div>
                   </div>
                 )}
@@ -211,12 +235,12 @@ export default function PricingPlans() {
                         color: '#d4af37'
                       }}
                     >
-                      最上位プラン
+                      人気プラン
                     </div>
                   </div>
                 )}
 
-                <CardHeader className={`text-center ${plan.popular || plan.premium ? 'pt-12' : 'pt-8'}`}>
+                <CardHeader className={`text-center ${plan.popular || plan.premium || plan.id === 'free' ? 'pt-12' : 'pt-8'}`}>
                   <div className={`flex items-center justify-center mb-4 p-3 rounded-full w-16 h-16 mx-auto ${
                     plan.premium 
                       ? 'bg-gray-900 text-yellow-500' 
@@ -277,35 +301,64 @@ export default function PricingPlans() {
                     ))}
                   </ul>
 
-                  <Button 
-                    onClick={() => handleSubscribe(plan.id)}
-                    disabled={isSubscribing || isDisabled}
-                    className={`w-full py-3 transition-all duration-300 mt-auto ${
-                      plan.premium
-                        ? 'bg-gray-900 text-yellow-500 hover:bg-gray-800 border-2 border-gray-900'
-                        : 'text-black border-2 hover:bg-yellow-500'
-                    }`}
-                    style={{
-                      background: plan.premium 
-                        ? '#1f2937'
-                        : plan.popular
-                          ? 'linear-gradient(135deg, #d4af37, #e6c547)'
-                          : 'linear-gradient(135deg, #d4af37, #e6c547)'
-                    }}
-                  >
-                    {isDisabled ? (
-                      '募集停止中'
-                    ) : isSubscribing ? (
-                      <div className="flex items-center justify-center">
-                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                        処理中...
-                      </div>
-                    ) : currentSubscription?.plan.name === plan.name ? (
-                      '現在のプラン'
-                    ) : (
-                      '今すぐ申し込む'
-                    )}
-                  </Button>
+                  {plan.id === 'free' ? (
+                    <div className="space-y-3">
+                      <Button 
+                        className="w-full bg-gray-700 hover:bg-gray-600 text-white text-xs"
+                        onClick={() => window.open('https://line.me/ti/g2/9Pr6jxLGQOdaKuKY5eDLAOa3-p8zU5Ht8N1laA?utm_source=invitation&utm_medium=link_copy&utm_campaign=default', '_blank')}
+                      >
+                        完全無料先出しルームはこちら
+                      </Button>
+                      <Button 
+                        className="w-full bg-gray-700 hover:bg-gray-600 text-white text-xs"
+                        onClick={() => window.open('https://discord.gg/f3vr94Qhqr', '_blank')}
+                      >
+                        トレード道場特別ラウンジ体験はこちら
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <Button 
+                        onClick={() => handleSubscribe(plan.id)}
+                        disabled={isSubscribing || isDisabled}
+                        className={`w-full py-3 transition-all duration-300 ${
+                          plan.premium
+                            ? 'bg-gray-900 text-yellow-500 hover:bg-gray-800 border-2 border-gray-900'
+                            : 'text-black border-2 hover:bg-yellow-500'
+                        }`}
+                        style={{
+                          background: plan.premium 
+                            ? '#1f2937'
+                            : plan.popular
+                              ? 'linear-gradient(135deg, #d4af37, #e6c547)'
+                              : 'linear-gradient(135deg, #d4af37, #e6c547)'
+                        }}
+                      >
+                        {isDisabled ? (
+                          '募集停止中'
+                        ) : isSubscribing ? (
+                          <div className="flex items-center justify-center">
+                            <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                            処理中...
+                          </div>
+                        ) : currentSubscription?.plan.name === plan.name ? (
+                          '現在のプラン'
+                        ) : (
+                          '今すぐ申し込む'
+                        )}
+                      </Button>
+                      <Button
+                        onClick={() => window.open('https://discord.gg/f3vr94Qhqr', '_blank')}
+                        className={`w-full py-2 bg-transparent border rounded-lg text-sm ${
+                          plan.premium 
+                            ? 'border-gray-900 text-gray-900 hover:bg-gray-900/10'
+                            : 'border-yellow-500 text-yellow-500 hover:bg-yellow-500/10'
+                        }`}
+                      >
+                        申込済会員はこちら（Discord）
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )
@@ -317,7 +370,10 @@ export default function PricingPlans() {
             ※ 銀行振り込みも対応しておりますが、個別相談者限定としております
           </p>
           <p className="text-gray-400 text-sm mt-2">
-            ※ Premiumプランの枠は空き次第Standardプランの方から優先案内となります
+            ※ プレミアムプランが満員の場合、スタンダードプランの方から優先案内となります
+          </p>
+          <p className="text-gray-400 text-sm mt-2">
+            ※ プレミアムプラン申し込み後に会員登録してください（未入会者は登録不可）
           </p>
           <p className="text-gray-400 text-sm mt-2">
             ※ プランのグレードアップは可能ですが、グレードを下げることはできません
@@ -328,34 +384,15 @@ export default function PricingPlans() {
           <p className="text-gray-400 mb-6">
             ご不明な点がございましたら、お気軽にお問い合わせください
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <div className="flex justify-center">
             <a
-              href="https://youtube.com/@aso_trade_infx?si=Szeu_8dcrATZ--0U"
+              href="https://lin.ee/EzJAtsw"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-300 hover:bg-red-500/30 rounded-lg transition-all font-medium"
-            >
-              <Play className="w-5 h-5" />
-              トレード道場YouTube
-              <ExternalLink className="w-4 h-4" />
-            </a>
-            <a
-              href="https://line.me/ti/g2/9Pr6jxLGQOdaKuKY5eDLAOa3-p8zU5Ht8N1laA?utm_source=invitation&utm_medium=link_copy&utm_campaign=default"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 px-4 py-2 bg-green-500/20 text-green-300 hover:bg-green-500/30 rounded-lg transition-all font-medium"
+              className="flex items-center gap-2 px-4 py-2 bg-green-600/20 text-green-300 hover:bg-green-600/30 rounded-lg transition-all font-medium"
             >
               <MessageCircle className="w-5 h-5" />
-              LINE
-              <ExternalLink className="w-4 h-4" />
-            </a>
-            <a
-              href="https://twitter.com/ASO_TRADE_SC"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 px-4 py-2 bg-gray-700/50 text-gray-300 hover:bg-gray-700/70 rounded-lg transition-all font-medium"
-            >
-              <span className="text-xl font-bold">𝕏</span>
+              麻生個人LINE
               <ExternalLink className="w-4 h-4" />
             </a>
           </div>

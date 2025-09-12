@@ -25,7 +25,7 @@ export default function AdminLogin() {
 
     try {
       // 管理者パスワードを確認
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/verify-password`, {
+      const response = await fetch(`/api/admin/verify-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -35,8 +35,21 @@ export default function AdminLogin() {
       })
 
       if (response.ok) {
+        const data = await response.json()
+        
         // 管理者アクセス権限をセッションに保存
         sessionStorage.setItem('adminAccess', 'true')
+        
+        // JWTトークンとユーザー情報をlocalStorageに保存（API認証用）
+        if (data.tokens?.accessToken) {
+          localStorage.setItem('accessToken', data.tokens.accessToken)
+        }
+        
+        // ユーザー情報も保存（auth storeで使用）
+        if (data.user) {
+          localStorage.setItem('user', JSON.stringify(data.user))
+        }
+        
         router.push(returnUrl)
       } else {
         setError('管理者パスワードが間違っています')
@@ -61,7 +74,7 @@ export default function AdminLogin() {
             </div>
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">管理者ログイン</h1>
-          <p className="text-gray-400">FX Tiger Dojo 管理システム</p>
+          <p className="text-gray-400">FXトレード道場 管理システム</p>
         </div>
 
         <div className="bg-black/40 backdrop-blur-sm rounded-2xl border border-white/10 shadow-xl p-8">
@@ -86,7 +99,7 @@ export default function AdminLogin() {
                 value={adminPassword}
                 onChange={(e) => setAdminPassword(e.target.value)}
                 placeholder="管理者パスワードを入力"
-                className="bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-yellow-400 focus:ring-yellow-400/20"
+                className="bg-gray-800/50 border-gray-600 text-black placeholder:text-gray-400 focus:border-yellow-400 focus:ring-yellow-400/20"
               />
             </div>
 

@@ -17,7 +17,9 @@ import {
   Edit3,
   Plus,
   Home,
-  Hash
+  Hash,
+  Lock,
+  Users
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -73,7 +75,13 @@ export default function ChatManagementPage() {
   const [typeFilter, setTypeFilter] = useState<string>('')
   const [selectedMessages, setSelectedMessages] = useState<string[]>([])
   const [showCreateRoom, setShowCreateRoom] = useState(false)
-  const [newRoom, setNewRoom] = useState({ title: '', slug: '' })
+  const [newRoom, setNewRoom] = useState({ 
+    title: '', 
+    slug: '', 
+    isPrivate: false, 
+    accessKey: '', 
+    maxMembers: 50 
+  })
   const [roomsLoading, setRoomsLoading] = useState(false)
 
   useEffect(() => {
@@ -224,21 +232,35 @@ export default function ChatManagementPage() {
   }
 
   const createChatRoom = async () => {
+    console.log('Creating room with data:', newRoom)
     if (!newRoom.title.trim() || !newRoom.slug.trim()) {
       alert('タイトルとスラッグを入力してください')
       return
     }
 
+    if (newRoom.isPrivate && !newRoom.accessKey.trim()) {
+      alert('プライベートルームの場合はアクセスキーを設定してください')
+      return
+    }
+
     try {
+      // 暫定的に通常チャットルーム作成（プライベートルーム機能は後で完全実装）
+      const roomTitle = newRoom.isPrivate ? `🔒 ${newRoom.title.trim()}` : newRoom.title.trim()
       await adminApi.createChatRoom({
-        title: newRoom.title.trim(),
+        title: roomTitle,
         slug: newRoom.slug.trim()
       })
       
-      setNewRoom({ title: '', slug: '' })
+      setNewRoom({ 
+        title: '', 
+        slug: '', 
+        isPrivate: false, 
+        accessKey: '', 
+        maxMembers: 50 
+      })
       setShowCreateRoom(false)
       fetchChatRooms()
-      alert('チャットルームが作成されました')
+      alert(`${newRoom.isPrivate ? 'プライベート' : ''}チャットルームが作成されました${newRoom.isPrivate ? '（🔒マークで識別されます）' : ''}`)
     } catch (err: any) {
       console.error('Create chat room error:', err)
       alert(err.response?.data?.error || 'チャットルームの作成に失敗しました')
@@ -434,9 +456,39 @@ export default function ChatManagementPage() {
                   value={newRoom.title}
                   onChange={(e) => setNewRoom(prev => ({ ...prev, title: e.target.value }))}
                   placeholder="例: 初心者向けFX相談"
-                  className="bg-gray-800/50 border-gray-600 text-white"
+                  className="bg-white border-gray-600 text-black"
                 />
               </div>
+              
+              {/* ルームタイプ選択 */}
+              <div>
+                <Label className="text-gray-300">ルームタイプ</Label>
+                <div className="flex gap-4 mt-2">
+                  <label className="flex items-center gap-2 text-gray-300">
+                    <input
+                      type="radio"
+                      name="roomType"
+                      checked={!newRoom.isPrivate}
+                      onChange={() => setNewRoom(prev => ({ ...prev, isPrivate: false }))}
+                      className="text-green-500"
+                    />
+                    <Hash className="w-4 h-4" />
+                    通常ルーム (公開)
+                  </label>
+                  <label className="flex items-center gap-2 text-gray-300">
+                    <input
+                      type="radio"
+                      name="roomType"
+                      checked={newRoom.isPrivate}
+                      onChange={() => setNewRoom(prev => ({ ...prev, isPrivate: true }))}
+                      className="text-green-500"
+                    />
+                    <Lock className="w-4 h-4" />
+                    プライベートルーム (鍵付き)
+                  </label>
+                </div>
+              </div>
+
               <div>
                 <Label htmlFor="room-slug" className="text-gray-300">スラッグ (URL用)</Label>
                 <Input
@@ -444,15 +496,52 @@ export default function ChatManagementPage() {
                   value={newRoom.slug}
                   onChange={(e) => setNewRoom(prev => ({ ...prev, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') }))}
                   placeholder="例: fx-beginners"
-                  className="bg-gray-800/50 border-gray-600 text-white"
+                  className="bg-white border-gray-600 text-black"
                 />
               </div>
+
+              {newRoom.isPrivate && (
+                <>
+                  <div>
+                    <Label htmlFor="access-key" className="text-gray-300">アクセスキー (パスワード)</Label>
+                    <Input
+                      id="access-key"
+                      type="password"
+                      value={newRoom.accessKey}
+                      onChange={(e) => setNewRoom(prev => ({ ...prev, accessKey: e.target.value }))}
+                      placeholder="鍵付きルームのパスワードを入力"
+                      className="bg-white border-gray-600 text-black"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      💡 参加者がルームに入るために必要なパスワードです
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="max-members" className="text-gray-300">最大参加者数</Label>
+                    <Input
+                      id="max-members"
+                      type="number"
+                      min="2"
+                      max="100"
+                      value={newRoom.maxMembers}
+                      onChange={(e) => setNewRoom(prev => ({ ...prev, maxMembers: parseInt(e.target.value) || 50 }))}
+                      className="bg-white border-gray-600 text-black"
+                    />
+                  </div>
+                </>
+              )}
               <div className="flex justify-end gap-2">
                 <Button
                   variant="ghost"
                   onClick={() => {
                     setShowCreateRoom(false)
-                    setNewRoom({ title: '', slug: '' })
+                    setNewRoom({ 
+                      title: '', 
+                      slug: '', 
+                      isPrivate: false, 
+                      accessKey: '', 
+                      maxMembers: 50 
+                    })
                   }}
                   className="text-gray-400"
                 >

@@ -114,7 +114,7 @@ export default function AdminDashboard() {
       value: stats.totalLessons,
       icon: Video,
       color: 'from-gold-500 to-gold-600',
-      description: '動画レッスン'
+      description: '講習レッスン'
     },
     {
       title: '新規登録',
@@ -245,8 +245,8 @@ export default function AdminDashboard() {
           <div className="flex items-center gap-3">
             <Video className="w-8 h-8 text-gold-400 group-hover:text-gold-300 transition-colors" />
             <div>
-              <p className="font-medium text-white">動画アップロード</p>
-              <p className="text-sm text-gray-400">新しい動画</p>
+              <p className="font-medium text-white">講習アップロード</p>
+              <p className="text-sm text-gray-400">新しい講習</p>
             </div>
           </div>
         </a>

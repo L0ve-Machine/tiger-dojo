@@ -5,6 +5,6 @@ export default function RegisterPage() {
 }
 
 export const metadata = {
-  title: 'ユーザー登録 - FX Tiger Dojo',
-  description: 'FX Tiger Dojoのアカウント登録'
+  title: 'ユーザー登録 - FXトレード道場',
+  description: 'FXトレード道場のアカウント登録'
 }
