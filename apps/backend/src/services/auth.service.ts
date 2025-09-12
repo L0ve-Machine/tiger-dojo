@@ -299,6 +299,8 @@ export class AuthService {
           name: true,
           role: true,
           discordName: true,
+          avatarColor: true,
+          avatarImage: true,
           isActive: true,
           emailVerified: true,
           registeredAt: true,

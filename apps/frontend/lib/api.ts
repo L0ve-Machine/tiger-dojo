@@ -331,5 +331,23 @@ export const vimeoApi = {
   getVideoData: (videoUrl: string) => api.get('/api/vimeo/oembed', { params: { url: videoUrl } }),
 }
 
+// Helper function to convert relative avatar paths to absolute URLs
+export const getAvatarUrl = (avatarPath: string | null | undefined): string | null => {
+  if (!avatarPath) return null
+  
+  // If it's already a full URL, return as is
+  if (avatarPath.startsWith('http://') || avatarPath.startsWith('https://')) {
+    return avatarPath
+  }
+  
+  // If it starts with /uploads/, convert to absolute URL
+  if (avatarPath.startsWith('/uploads/')) {
+    // Always use the main domain (nginx) for both dev and prod
+    return `http://trade-dojo-fx.com${avatarPath}`
+  }
+  
+  return avatarPath
+}
+
 // Generic API helper
 export default api

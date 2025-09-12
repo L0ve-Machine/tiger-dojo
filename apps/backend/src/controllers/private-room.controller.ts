@@ -7,9 +7,8 @@ import { prisma } from '../index'
 export const createPrivateRoom = async (req: Request, res: Response) => {
   try {
     console.log('Creating private room with data:', req.body)
-    const { name, description, accessKey, isPublic = false, maxMembers = 50, allowInvites = true, requireApproval = false } = req.body
-    // Temporary fix: use admin user ID for testing
-    const userId = req.user?.userId || 'cm31yqf5a0000clei5xhm99wf' // Admin user ID from CLAUDE.md
+    const { name, slug, description, accessKey, isPublic = false, maxMembers = 50, allowInvites = true, requireApproval = false } = req.body
+    const userId = req.user?.userId
 
     if (!name?.trim()) {
       console.log('Room name validation failed:', name)
@@ -19,13 +18,13 @@ export const createPrivateRoom = async (req: Request, res: Response) => {
       })
     }
 
-    // Generate unique slug
-    const baseSlug = generateSlug(name)
-    let slug = baseSlug
+    // Use provided slug or generate from name
+    let finalSlug = slug?.trim() || generateSlug(name)
     let counter = 1
     
-    while (await prisma.privateRoom.findUnique({ where: { slug } })) {
-      slug = `${baseSlug}-${counter}`
+    // Ensure slug uniqueness
+    while (await prisma.privateRoom.findUnique({ where: { slug: finalSlug } })) {
+      finalSlug = `${slug?.trim() || generateSlug(name)}-${counter}`
       counter++
     }
 
@@ -39,7 +38,7 @@ export const createPrivateRoom = async (req: Request, res: Response) => {
       data: {
         name: name.trim(),
         description: description?.trim() || null,
-        slug,
+        slug: finalSlug,
         accessKey: hashedAccessKey,
         isPublic,
         maxMembers,
@@ -765,6 +764,52 @@ export const removeFromRoom = async (req: Request, res: Response) => {
   }
 }
 
+// Check if user is a member of a private room
+export const checkMembership = async (req: Request, res: Response) => {
+  try {
+    const { roomSlug } = req.params
+    const userId = req.user?.userId
+    
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' })
+    }
+    
+    console.log('🔐 Checking membership for user:', userId, 'room:', roomSlug)
+    
+    // Find the private room by slug
+    const privateRoom = await prisma.privateRoom.findUnique({
+      where: { slug: roomSlug },
+      include: {
+        members: {
+          where: {
+            userId,
+            isActive: true,
+            isBanned: false
+          }
+        }
+      }
+    })
+    
+    if (!privateRoom) {
+      return res.status(404).json({ success: false, error: 'Room not found' })
+    }
+    
+    const isCreator = privateRoom.createdBy === userId
+    const isMember = privateRoom.members.length > 0
+    
+    console.log('🔐 Membership check result:', { isCreator, isMember })
+    
+    return res.json({
+      success: true,
+      isMember: isCreator || isMember,
+      roomId: privateRoom.id
+    })
+  } catch (error) {
+    console.error('Error checking membership:', error)
+    res.status(500).json({ success: false, error: 'Failed to check membership' })
+  }
+}
+
 // Verify room password for locked chat rooms
 export const verifyRoomPassword = async (req: Request, res: Response) => {
   console.log('🔐 verifyRoomPassword called with body:', req.body)
@@ -792,9 +837,10 @@ export const verifyRoomPassword = async (req: Request, res: Response) => {
     console.log('🔐 Private room found:', privateRoom ? { id: privateRoom.id, name: privateRoom.name, hasAccessKey: !!privateRoom.accessKey } : 'null')
 
     if (privateRoom && privateRoom.accessKey) {
-      console.log('🔐 Comparing passwords - provided vs stored:', { provided: password, stored: privateRoom.accessKey })
-      // Verify password (currently stored as plain text for testing)
-      const isValidPassword = password === privateRoom.accessKey
+      console.log('🔐 Verifying password with bcrypt')
+      
+      // Verify password using bcrypt
+      const isValidPassword = await bcrypt.compare(password, privateRoom.accessKey)
       
       console.log('🔐 Password validation result:', isValidPassword)
       
@@ -803,29 +849,27 @@ export const verifyRoomPassword = async (req: Request, res: Response) => {
         return res.status(401).json({ success: false, error: 'パスワードが正しくありません' })
       }
 
-      // For now, skip member management and just validate password
-      console.log('🔐 Password validation successful, returning success')
-      
+      // Check if user is already a member
+      const existingMember = await prisma.privateRoomMember.findUnique({
+        where: {
+          userId_roomId: { userId, roomId: privateRoom.id }
+        }
+      })
+
+      console.log('🔐 Existing member check:', existingMember ? 'Found' : 'Not found')
+
+      // Password is correct, return success with room info
       return res.json({ 
         success: true, 
         message: 'パスワードが確認されました',
-        roomId: privateRoom.id 
+        roomId: privateRoom.id,
+        isAlreadyMember: !!existingMember && existingMember.isActive
       })
     }
 
-    // For now, if no private room found, we'll implement a simple check for the visual indicator
-    // This is temporary until full private room backend is implemented
-    
-    // Simple password check for demonstration - in production, this should be proper room authentication
-    if (password === 'test' || password === 'password') {
-      return res.json({ 
-        success: true, 
-        message: 'パスワードが確認されました (簡易認証)',
-        roomId: roomSlug 
-      })
-    }
-
-    return res.status(401).json({ success: false, error: 'パスワードが正しくありません' })
+    // If no private room found or no access key, deny access
+    console.log('🔐 No private room found or no access key set')
+    return res.status(404).json({ success: false, error: 'プライベートルームが見つかりません' })
   } catch (error) {
     console.error('Error verifying room password:', error)
     res.status(500).json({ success: false, error: 'パスワード確認に失敗しました' })

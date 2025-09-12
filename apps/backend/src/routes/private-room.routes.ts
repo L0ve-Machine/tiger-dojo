@@ -11,13 +11,14 @@ import {
   getRoomMembers,
   inviteToRoom,
   removeFromRoom,
-  verifyRoomPassword
+  verifyRoomPassword,
+  checkMembership
 } from '../controllers/private-room.controller'
 
 const router = express.Router()
 
-// Apply auth middleware to all routes (temporarily disabled for testing)
-// router.use(authenticateToken)
+// Apply auth middleware to all routes
+router.use(authenticateToken)
 
 // Room management
 router.post('/', createPrivateRoom)
@@ -37,5 +38,8 @@ router.delete('/:roomId/members/:userId', removeFromRoom)
 
 // Password verification for locked chat rooms
 router.post('/verify-password', verifyRoomPassword)
+
+// Check membership status
+router.get('/:roomSlug/check-membership', checkMembership)
 
 export default router

@@ -5,6 +5,8 @@ interface User {
   email: string
   name: string
   role: string
+  avatarColor?: string | null
+  avatarImage?: string | null
   subscription_plan?: string
   createdAt?: string
 }
@@ -24,6 +26,7 @@ interface AuthState {
   login: (email: string, password: string) => Promise<boolean>
   logout: () => void
   checkAuth: () => Promise<void>
+  updateUser: (userData: Partial<User>) => void
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -149,6 +152,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isAuthenticated: false,
         isLoading: false,
         error: null,
+      })
+    }
+  },
+
+  updateUser: (userData: Partial<User>) => {
+    const currentUser = get().user
+    if (currentUser) {
+      set({
+        user: { ...currentUser, ...userData }
       })
     }
   },

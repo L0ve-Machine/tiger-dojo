@@ -450,12 +450,12 @@ function LessonPageContent() {
                 <div>
                   <div className="flex justify-between text-sm text-gray-400 mb-2">
                     <span>進捗</span>
-                    <span>{progress?.percentage || 0}%</span>
+                    <span>{Math.round((progress?.watchedSeconds || 0) / (lesson?.duration || 1) * 100)}%</span>
                   </div>
                   <div className="w-full bg-gray-700 rounded-full h-2">
                     <div 
                       className="bg-yellow-400 h-2 rounded-full transition-all duration-300" 
-                      style={{ width: `${progress?.percentage || 0}%` }}
+                      style={{ width: `${Math.round((progress?.watchedSeconds || 0) / (lesson?.duration || 1) * 100)}%` }}
                     ></div>
                   </div>
                 </div>
@@ -488,7 +488,7 @@ function LessonPageContent() {
                   </div>
                   <div className="bg-gray-700/30 rounded p-2">
                     <div className="text-yellow-400 font-semibold">進捗率</div>
-                    <div className="text-gray-300">{progress?.percentage || 0}%</div>
+                    <div className="text-gray-300">{Math.round((progress?.watchedSeconds || 0) / (lesson?.duration || 1) * 100)}%</div>
                   </div>
                   <div className="bg-gray-700/30 rounded p-2">
                     <div className="text-yellow-400 font-semibold">順番</div>

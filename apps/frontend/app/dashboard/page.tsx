@@ -383,8 +383,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Course Progress - Hidden as requested */}
-        {false && statistics?.courseProgress && statistics.courseProgress.length > 0 && (
+        {/* Course Progress - Hidden as requested 
+        {false && statistics && statistics.courseProgress && statistics.courseProgress.length > 0 && (
           <section className="mb-12">
             <h3 className="text-2xl font-bold text-white mb-6">コース進捗</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -407,7 +407,7 @@ export default function DashboardPage() {
               ))}
             </div>
           </section>
-        )}
+        )} */}
 
         {/* Latest Videos Section */}
         {latestLessons.length > 0 && (
@@ -424,15 +424,7 @@ export default function DashboardPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               {latestLessons.map((lesson) => {
-                const Component = lesson.isAvailable ? Link : 'div'
-                const linkProps = lesson.isAvailable ? { href: `/lessons/${lesson.id}` } : {}
-                
-                return (
-                  <Component 
-                    key={lesson.id} 
-                    {...linkProps}
-                    className={`group ${lesson.isAvailable ? 'cursor-pointer' : 'cursor-not-allowed'} ${!lesson.isAvailable ? 'relative opacity-70' : ''}`}
-                  >
+                const content = (
                   <div className="relative aspect-video bg-gray-900 rounded-xl overflow-hidden border border-gray-700 group-hover:border-yellow-400/50 transition-all duration-300 shadow-lg">
                     <img 
                       src={lesson.thumbnailUrl || '/api/placeholder/640/360'} 
@@ -483,8 +475,24 @@ export default function DashboardPage() {
                       </div>
                     )}
                   </div>
-                </Component>
-                )
+                );
+
+                return lesson.isAvailable ? (
+                  <Link 
+                    key={lesson.id} 
+                    href={`/lessons/${lesson.id}`}
+                    className="group cursor-pointer"
+                  >
+                    {content}
+                  </Link>
+                ) : (
+                  <div 
+                    key={lesson.id} 
+                    className="group cursor-not-allowed opacity-70"
+                  >
+                    {content}
+                  </div>
+                );
               })}
             </div>
           </section>

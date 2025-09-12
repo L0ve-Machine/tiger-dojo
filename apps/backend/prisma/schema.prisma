@@ -18,6 +18,10 @@ model User {
   role            String    @default("STUDENT")
   discordName     String?
   age             Int?
+  
+  // Avatar settings
+  avatarColor     String?   // Gradient color class (e.g., "from-yellow-400 to-amber-600")
+  avatarImage     String?   // Image URL for custom avatar
   gender          String?
   tradingExperience String?
   registeredAt    DateTime  @default(now())

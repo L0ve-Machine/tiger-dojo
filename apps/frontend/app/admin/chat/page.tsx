@@ -244,12 +244,34 @@ export default function ChatManagementPage() {
     }
 
     try {
-      // 暫定的に通常チャットルーム作成（プライベートルーム機能は後で完全実装）
-      const roomTitle = newRoom.isPrivate ? `🔒 ${newRoom.title.trim()}` : newRoom.title.trim()
-      await adminApi.createChatRoom({
-        title: roomTitle,
-        slug: newRoom.slug.trim()
-      })
+      if (newRoom.isPrivate) {
+        // Create private room
+        const response = await fetch('/api/private-rooms', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          },
+          body: JSON.stringify({
+            name: newRoom.title.trim(),
+            slug: newRoom.slug.trim() || newRoom.title.trim().toLowerCase().replace(/[^a-z0-9]/g, '-'),
+            accessKey: newRoom.accessKey.trim(),
+            isPublic: false,
+            maxMembers: newRoom.maxMembers
+          })
+        })
+        
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || 'プライベートルームの作成に失敗しました')
+        }
+      } else {
+        // Create regular course room
+        await adminApi.createChatRoom({
+          title: newRoom.title.trim(),
+          slug: newRoom.slug.trim()
+        })
+      }
       
       setNewRoom({ 
         title: '', 
@@ -260,10 +282,10 @@ export default function ChatManagementPage() {
       })
       setShowCreateRoom(false)
       fetchChatRooms()
-      alert(`${newRoom.isPrivate ? 'プライベート' : ''}チャットルームが作成されました${newRoom.isPrivate ? '（🔒マークで識別されます）' : ''}`)
+      alert(`${newRoom.isPrivate ? 'プライベート' : ''}チャットルームが作成されました`)
     } catch (err: any) {
       console.error('Create chat room error:', err)
-      alert(err.response?.data?.error || 'チャットルームの作成に失敗しました')
+      alert(err.message || err.response?.data?.error || 'チャットルームの作成に失敗しました')
     }
   }
 
@@ -424,7 +446,6 @@ export default function ChatManagementPage() {
                   <div>
                     <h4 className="text-white font-medium">{room.title}</h4>
                     <p className="text-sm text-gray-400">/{room.slug}</p>
-                    <p className="text-xs text-gray-500">{room._count.messages} メッセージ</p>
                   </div>
                   <Button
                     size="sm"

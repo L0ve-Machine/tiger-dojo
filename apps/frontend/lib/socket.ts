@@ -9,6 +9,8 @@ export interface ChatMessage {
   userId: string
   userName: string
   userRole: string
+  avatarColor?: string | null
+  avatarImage?: string | null
   content: string
   type: 'TEXT' | 'QUESTION' | 'ANSWER' | 'ANNOUNCEMENT'
   createdAt: Date
@@ -24,9 +26,10 @@ export interface OnlineUser {
 }
 
 export interface RoomInfo {
-  roomType: 'lesson' | 'course' | 'dm'
+  roomType: 'lesson' | 'course' | 'dm' | 'private'
   roomId: string
   roomName: string
+  channelId?: string
 }
 
 // Socket Store
@@ -45,7 +48,7 @@ interface SocketState {
   connect: (token: string) => void
   disconnect: () => void
   joinRoom: (roomType: 'lesson' | 'course' | 'dm' | 'private', roomId: string) => void
-  joinChannel: (channelId: string) => void
+  joinChannel: (channelId: string, roomType?: 'lesson' | 'course' | 'dm' | 'private') => void
   leaveRoom: () => void
   sendMessage: (content: string, type?: ChatMessage['type']) => void
   startTyping: () => void
@@ -271,22 +274,72 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     }
   },
 
-  sendMessage: (content: string, type: ChatMessage['type'] = 'TEXT') => {
-    const { socket, currentRoom } = get()
+  sendMessage: async (content: string, type: ChatMessage['type'] = 'TEXT') => {
+    const { socket, currentRoom, isConnected, currentChannel } = get()
     
-    if (!currentRoom) {
-      console.error('Not in a room')
-      return
-    }
+    // Use currentChannel if available, fallback to currentRoom
+    const channelId = currentChannel || (currentRoom ? currentRoom.roomId : 'general')
+    const roomType = currentRoom ? currentRoom.roomType : 'course'
+    const roomId = currentRoom ? currentRoom.roomId : 'general'
 
-    console.log('Sending message to room:', currentRoom.roomId, 'type:', currentRoom.roomType)
-    
-    socket?.emit('send_message', {
-      roomType: currentRoom.roomType,
-      roomId: currentRoom.roomId,
-      content,
-      type
-    })
+    console.log('Sending message:', { channelId, roomType, roomId, isConnected })
+
+    // Try Socket.io first if connected
+    if (isConnected && socket?.connected) {
+      socket.emit('send_message', {
+        roomType,
+        roomId,
+        content,
+        type,
+        channelId
+      })
+    } else {
+      // Fallback to HTTP API
+      console.log('Socket not connected, using HTTP API')
+      try {
+        const token = localStorage.getItem('accessToken')
+        if (!token) {
+          console.error('No auth token available')
+          return
+        }
+
+        const response = await fetch('/api/chat/message', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            content,
+            channelId,
+            roomType,
+            roomId
+          })
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          console.log('Message sent via HTTP API:', data)
+          
+          // Add message to local state immediately
+          const message = data.message
+          set(state => {
+            const newMessages = [...state.messages, message]
+            const newMessagesByChannel = { ...state.messagesByChannel }
+            newMessagesByChannel[channelId] = newMessages
+            
+            return {
+              messages: newMessages,
+              messagesByChannel: newMessagesByChannel
+            }
+          })
+        } else {
+          console.error('Failed to send message via HTTP API:', response.statusText)
+        }
+      } catch (error) {
+        console.error('HTTP API send message error:', error)
+      }
+    }
   },
 
   startTyping: () => {
@@ -311,7 +364,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     }
   },
 
-  joinChannel: (channelId: string, channelData?: any) => {
+  joinChannel: (channelId: string, roomType?: 'lesson' | 'course' | 'dm' | 'private') => {
     const { socket, currentRoom, messagesByChannel } = get()
     
     // Leave current room if in one
@@ -328,15 +381,11 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       messages: existingMessages
     })
     
-    // Use the channelId as the roomId directly
-    // channelId should now be the actual database slug/ID
-    const roomId = channelId
+    // Use provided roomType or default to 'course'
+    const finalRoomType = roomType || 'course'
     
-    // Default to course type if not specified
-    const roomType = channelData?.roomType || 'course'
-    
-    console.log('Joining channel with roomType:', roomType, 'roomId:', roomId, 'channelData:', channelData)
-    socket?.emit('join_room', { roomType, roomId })
+    console.log('Joining channel with roomType:', finalRoomType, 'roomId:', channelId)
+    socket?.emit('join_room', { roomType: finalRoomType, roomId: channelId })
     
     set({ currentChannel: channelId })
   },

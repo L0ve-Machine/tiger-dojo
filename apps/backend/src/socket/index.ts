@@ -163,6 +163,7 @@ export class SocketServer {
     const roomName = this.getRoomName(roomType, roomId)
     
     console.log(`User ${socket.data.userName} (${socket.data.userId}) attempting to join room: ${roomName}`)
+    console.log(`Join room data: roomType=${roomType}, roomId=${roomId}`)
     
     // Extract channel from roomId if it contains channel info
     let channelId = 'general'
@@ -175,12 +176,12 @@ export class SocketServer {
     }
 
     try {
-      // Check access permissions using base room ID
+      // Check access permissions - pass the full roomId for course rooms
       const hasAccess = await this.checkRoomAccess(
         socket.data.userId,
         socket.data.userRole,
         roomType,
-        baseRoomId
+        roomId  // Use full roomId instead of baseRoomId
       )
 
       if (!hasAccess) {
@@ -275,15 +276,33 @@ export class SocketServer {
       }
 
       // Save message to database with channel/DM/private room info
+      let privateRoomId = null
+      if (roomType === 'private') {
+        // Get the actual private room ID from slug
+        const privateRoom = await prisma.privateRoom.findUnique({
+          where: { slug: baseRoomId }
+        })
+        privateRoomId = privateRoom?.id || null
+      }
+
       const message = await this.saveMessage({
         userId: socket.data.userId,
         lessonId: roomType === 'lesson' ? baseRoomId : null,
         courseId: roomType === 'course' ? baseRoomId : null,
-        privateRoomId: roomType === 'private' ? baseRoomId : null,
+        privateRoomId,
         content,
         type,
         channelId: roomType === 'dm' ? undefined : channelId,
         dmRoomId: roomType === 'dm' ? roomId : null
+      })
+
+      // Get user avatar info
+      const userInfo = await prisma.user.findUnique({
+        where: { id: socket.data.userId },
+        select: {
+          avatarColor: true,
+          avatarImage: true
+        }
       })
 
       // Prepare message data
@@ -292,6 +311,8 @@ export class SocketServer {
         userId: socket.data.userId,
         userName: socket.data.userName,
         userRole: socket.data.userRole,
+        avatarColor: userInfo?.avatarColor,
+        avatarImage: userInfo?.avatarImage,
         content: message.content,
         type: message.type,
         createdAt: message.createdAt,
@@ -419,58 +440,66 @@ export class SocketServer {
     roomType: string,
     roomId: string
   ): Promise<boolean> {
-    // Admins and instructors have access to all rooms
-    if (userRole === 'ADMIN' || userRole === 'INSTRUCTOR') {
-      return true
-    }
-
-    // Check specific room type access
-    if (roomType === 'lesson') {
-      // In development, allow all authenticated users to access lesson chat
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('Development mode: Allowing access to lesson chat for user:', userId)
-        return true
-      }
-      
-      // Check if user has access to the lesson
-      const enrollment = await prisma.enrollment.findFirst({
-        where: {
-          userId,
-          course: {
-            lessons: {
-              some: { id: roomId }
+    console.log(`🔒 Checking room access for user ${userId}, roomType: ${roomType}, roomId: ${roomId}`)
+    
+    try {
+      // For private rooms (including locked chat rooms), verify membership
+      if (roomType === 'private') {
+        console.log(`🔒 Checking private room access for roomId: ${roomId}`)
+        
+        // First check if this is a private room by slug
+        const privateRoom = await prisma.privateRoom.findUnique({
+          where: { slug: roomId },
+          include: {
+            members: {
+              where: {
+                userId,
+                isActive: true,
+                isBanned: false
+              }
             }
           }
+        })
+        
+        if (privateRoom) {
+          console.log(`🔒 Private room found: ${privateRoom.name}, checking membership`)
+          const isCreator = privateRoom.createdBy === userId
+          const isMember = privateRoom.members.length > 0
+          const hasAccess = isCreator || isMember
+          
+          console.log(`🔒 Access result: isCreator=${isCreator}, isMember=${isMember}, hasAccess=${hasAccess}`)
+          return hasAccess
         }
-      })
-      return !!enrollment
-    }
-
-    if (roomType === 'course') {
-      // In development, allow all authenticated users
-      if (process.env.NODE_ENV !== 'production') {
+      }
+      
+      // For lesson and course rooms, check enrollment
+      if (roomType === 'lesson' || roomType === 'course') {
+        // Admin and instructors have access to all rooms
+        if (userRole === 'ADMIN' || userRole === 'INSTRUCTOR') {
+          console.log(`🔒 Granting access to ${userRole}`)
+          return true
+        }
+        
+        // TODO: Check course enrollment for students
+        // For now, allow all authenticated users
+        console.log(`🔒 Granting access to authenticated user for lesson/course room`)
         return true
       }
       
-      // For course-level chats (general channels), check if user has any enrollment
-      // This allows access to general chat channels for enrolled students
-      const hasEnrollment = await prisma.enrollment.findFirst({
-        where: { userId }
-      })
-      return !!hasEnrollment
-    }
-
-    // DM rooms - allow all authenticated users
-    if (roomType === 'dm') {
+      // For DM rooms, allow all authenticated users
+      if (roomType === 'dm') {
+        console.log(`🔒 Granting access to DM room`)
+        return true
+      }
+      
+      // For regular chat rooms, allow all authenticated users
+      console.log(`🔒 Granting access to regular chat room`)
       return true
+      
+    } catch (error) {
+      console.error('🔒 Error checking room access:', error)
+      return false
     }
-
-    // Private rooms - allow all authenticated users (password authentication handled at frontend)
-    if (roomType === 'private') {
-      return true
-    }
-
-    return false
   }
 
   private async saveMessage(data: {
@@ -547,7 +576,9 @@ export class SocketServer {
             select: {
               id: true,
               name: true,
-              role: true
+              role: true,
+              avatarColor: true,
+              avatarImage: true
             }
           }
         },
@@ -560,6 +591,8 @@ export class SocketServer {
         userId: msg.user.id,
         userName: msg.user.name,
         userRole: msg.user.role,
+        avatarColor: msg.user.avatarColor,
+        avatarImage: msg.user.avatarImage,
         content: msg.content,
         type: msg.type,
         createdAt: msg.createdAt,
@@ -578,7 +611,9 @@ export class SocketServer {
             select: {
               id: true,
               name: true,
-              role: true
+              role: true,
+              avatarColor: true,
+              avatarImage: true
             }
           }
         },
@@ -591,6 +626,8 @@ export class SocketServer {
         userId: msg.user.id,
         userName: msg.user.name,
         userRole: msg.user.role,
+        avatarColor: msg.user.avatarColor,
+        avatarImage: msg.user.avatarImage,
         content: msg.content,
         type: msg.type,
         createdAt: msg.createdAt,
@@ -599,9 +636,18 @@ export class SocketServer {
     }
 
     if (roomType === 'private') {
+      // Get the actual private room ID from slug
+      const privateRoom = await prisma.privateRoom.findUnique({
+        where: { slug: roomId }
+      })
+      
+      if (!privateRoom) {
+        return []
+      }
+
       const messages = await prisma.chatMessage.findMany({
         where: { 
-          privateRoomId: roomId,
+          privateRoomId: privateRoom.id,
           channelId: channelId
         },
         include: {
@@ -609,7 +655,9 @@ export class SocketServer {
             select: {
               id: true,
               name: true,
-              role: true
+              role: true,
+              avatarColor: true,
+              avatarImage: true
             }
           }
         },
@@ -622,6 +670,8 @@ export class SocketServer {
         userId: msg.user.id,
         userName: msg.user.name,
         userRole: msg.user.role,
+        avatarColor: msg.user.avatarColor,
+        avatarImage: msg.user.avatarImage,
         content: msg.content,
         type: msg.type,
         createdAt: msg.createdAt,

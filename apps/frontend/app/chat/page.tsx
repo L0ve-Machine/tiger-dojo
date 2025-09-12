@@ -5,10 +5,13 @@ import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/auth-store'
 import { useSocketStore } from '@/lib/socket'
 import { authApi } from '@/lib/api'
-import { Send, Users, Hash, AtSign, Settings, Plus, Search, Mic, Menu, X, AlertTriangle, Loader2, RefreshCw, Lock, UserPlus, Key } from 'lucide-react'
+import { Send, Users, Hash, AtSign, Settings, Plus, Search, Mic, Menu, X, AlertTriangle, Loader2, RefreshCw, Lock, UserPlus, Key, MessageCircle, Upload, Trash2, Home, BookOpen } from 'lucide-react'
+import Avatar from '@/components/ui/Avatar'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import Image from 'next/image'
+import DMSidebar from '@/components/chat/DMSidebar'
+import DMChat from '@/components/chat/DMChat'
 
 // Types for better TypeScript support
 interface Channel {
@@ -16,6 +19,7 @@ interface Channel {
   name: string
   type: 'text'
   description: string
+  slug?: string
 }
 
 interface ErrorState {
@@ -32,14 +36,13 @@ interface LoadingStates {
 
 export default function ChatPage() {
   const router = useRouter()
-  const { user, isAuthenticated } = useAuthStore()
+  const { user, isAuthenticated, updateUser } = useAuthStore()
   const {
     socket,
     isConnected,
     currentRoom,
     currentChannel,
     messagesByChannel,
-    roomOnlineUsers,
     typingUsers,
     connect,
     joinRoom,
@@ -55,7 +58,6 @@ export default function ChatPage() {
   const [messageInput, setMessageInput] = useState('')
   const [isTyping, setIsTyping] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [showUsersSidebar, setShowUsersSidebar] = useState(false)
   const [showChannelModal, setShowChannelModal] = useState(false)
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [channels, setChannels] = useState<Channel[]>([])
@@ -63,6 +65,12 @@ export default function ChatPage() {
   const [newChannelDescription, setNewChannelDescription] = useState('')
   const [dmUsers, setDmUsers] = useState<{id: string, name: string, unread?: number}[]>([])
   const [selectedDmUser, setSelectedDmUser] = useState<string | null>(null)
+  const [selectedDmRoomId, setSelectedDmRoomId] = useState<string>('')
+  const [showDMSidebar, setShowDMSidebar] = useState(false)
+  const [channelUnreadCounts, setChannelUnreadCounts] = useState<Record<string, number>>({})
+  const [lastReadTimestamps, setLastReadTimestamps] = useState<Record<string, number>>({})
+  const [dmUnreadCounts, setDmUnreadCounts] = useState<Record<string, number>>({})
+  const [dmLastReadTimestamps, setDmLastReadTimestamps] = useState<Record<string, number>>({})
   const [error, setError] = useState<ErrorState | null>(null)
   const [loadingStates, setLoadingStates] = useState<LoadingStates>({
     sendingMessage: false,
@@ -79,6 +87,10 @@ export default function ChatPage() {
   const [lastPongTime, setLastPongTime] = useState(Date.now())
   const [playNotificationSound, setPlayNotificationSound] = useState(false)
   const [newUserName, setNewUserName] = useState('')
+  const [selectedAvatarColor, setSelectedAvatarColor] = useState('')
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [showPrivateRoomModal, setShowPrivateRoomModal] = useState(false)
   const [showJoinRoomModal, setShowJoinRoomModal] = useState(false)
   const [privateRooms, setPrivateRooms] = useState([])
@@ -93,23 +105,34 @@ export default function ChatPage() {
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [passwordPromptRoom, setPasswordPromptRoom] = useState<{id: string, name: string, slug?: string} | null>(null)
   const [roomPassword, setRoomPassword] = useState('')
-  const [authenticatedRooms, setAuthenticatedRooms] = useState<Set<string>>(() => {
-    // Load authenticated rooms from localStorage on initialization
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('authenticatedRooms')
-      return stored ? new Set(JSON.parse(stored)) : new Set()
-    }
-    return new Set()
-  })
+  
+  // Mention functionality states
+  const [showMentionSuggestions, setShowMentionSuggestions] = useState(false)
+  const [mentionQuery, setMentionQuery] = useState('')
+  const [availableUsers, setAvailableUsers] = useState<{
+    id: string, 
+    name: string, 
+    role: string,
+    avatarColor?: string | null,
+    avatarImage?: string | null
+  }[]>([])
+  const [cursorPosition, setCursorPosition] = useState(0)
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0)
+  
+  // Remove localStorage-based authentication - rely on server-side membership only
+  const [authenticatedRooms, setAuthenticatedRooms] = useState<Set<string>>(new Set())
   
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Get current messages (channel or DM)
+  // Get current messages (channel, DM, or private room)
   const messages = selectedDmUser && currentRoom?.roomType === 'dm' 
     ? (getDmMessages ? getDmMessages(currentRoom.roomId) || [] : [])
     : (getChannelMessages ? getChannelMessages(selectedChannel) || [] : [])
+  
+  // Debug log (temporary)
+  // console.log('Selected channel:', selectedChannel, 'Messages count:', messages.length, 'Current room:', currentRoom)
 
   // Initialize notification sound
   useEffect(() => {
@@ -188,6 +211,25 @@ export default function ChatPage() {
     }
   }
 
+  // Load available users for mentions
+  const loadAvailableUsers = async () => {
+    try {
+      const token = localStorage.getItem('accessToken')
+      const response = await fetch('/api/dm/users', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (response.ok) {
+        const users = await response.json()
+        setAvailableUsers(users)
+      }
+    } catch (error) {
+      console.error('Failed to load available users:', error)
+    }
+  }
+
   // Check authentication
   useEffect(() => {
     if (!isAuthenticated) {
@@ -195,6 +237,7 @@ export default function ChatPage() {
     } else {
       // Fetch chat rooms when authenticated
       fetchChatRooms()
+      loadAvailableUsers()
     }
   }, [isAuthenticated, router])
 
@@ -263,6 +306,34 @@ export default function ChatPage() {
     }
   }, [isConnected, currentRoom, joinChannel])
 
+  // Monitor new messages for unread count
+  useEffect(() => {
+    if (!messagesByChannel || !user) return
+
+    Object.entries(messagesByChannel).forEach(([channelId, channelMessages]) => {
+      if (!channelMessages || channelMessages.length === 0) return
+
+      // Get the last read timestamp for this channel
+      const lastRead = lastReadTimestamps[channelId] || 0
+      
+      // Count unread messages (messages newer than lastRead and not from current user)
+      const unreadCount = channelMessages.filter(msg => {
+        const messageTime = new Date(msg.createdAt).getTime()
+        return messageTime > lastRead && 
+               msg.userId !== user.id && 
+               channelId !== selectedChannel // Don't count messages in currently selected channel
+      }).length
+
+      // Update unread count if it changed
+      if (unreadCount > 0) {
+        setChannelUnreadCounts(prev => ({
+          ...prev,
+          [channelId]: unreadCount
+        }))
+      }
+    })
+  }, [messagesByChannel, lastReadTimestamps, user, selectedChannel])
+
   // Sanitize message content to prevent XSS
   const sanitizeMessage = useCallback((content: string): string => {
     return content
@@ -288,17 +359,15 @@ export default function ChatPage() {
   // Handle mention detection
   const processMentions = (text: string): string => {
     return text.replace(/@([a-zA-Z0-9_]+)/g, (match, username) => {
-      const mentionedUser = roomOnlineUsers.find(u => u.userName.toLowerCase() === username.toLowerCase())
-      if (mentionedUser) {
-        return `<span class="bg-yellow-400/20 text-yellow-400 px-1 rounded font-semibold">${match}</span>`
-      }
-      return match
+      // Simply highlight all mentions without checking online users
+      return `<span class="bg-yellow-400/20 text-yellow-400 px-1 rounded font-semibold">${match}</span>`
     })
   }
 
-  // Handle typing indicator with error handling
+  // Handle typing indicator with error handling and mention detection
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
+    const cursorPos = e.target.selectionStart || 0
     
     // Character limit validation
     if (value.length > 1000) {
@@ -307,7 +376,23 @@ export default function ChatPage() {
     }
     
     setMessageInput(value)
+    setCursorPosition(cursorPos)
     setError(null)
+    
+    // Check for @ mention
+    const textBeforeCursor = value.substring(0, cursorPos)
+    const mentionMatch = textBeforeCursor.match(/@(\w*)$/)
+    
+    if (mentionMatch) {
+      const query = mentionMatch[1].toLowerCase()
+      setMentionQuery(query)
+      setShowMentionSuggestions(true)
+      setSelectedMentionIndex(0)
+    } else {
+      setShowMentionSuggestions(false)
+      setMentionQuery('')
+      setSelectedMentionIndex(0)
+    }
     
     if (!isTyping && value.length > 0) {
       setIsTyping(true)
@@ -334,6 +419,72 @@ export default function ChatPage() {
     }, 1000)
   }
 
+  // Handle mention selection
+  const handleMentionSelect = (userName: string) => {
+    const textBeforeCursor = messageInput.substring(0, cursorPosition)
+    const textAfterCursor = messageInput.substring(cursorPosition)
+    const mentionMatch = textBeforeCursor.match(/@(\w*)$/)
+    
+    if (mentionMatch) {
+      const beforeMention = textBeforeCursor.substring(0, mentionMatch.index)
+      const newText = beforeMention + `@${userName} ` + textAfterCursor
+      setMessageInput(newText)
+      setShowMentionSuggestions(false)
+      setMentionQuery('')
+    }
+  }
+
+  // Filter users for mentions
+  const filteredUsers = availableUsers.filter(user => 
+    user.name.toLowerCase().includes(mentionQuery)
+  ).slice(0, 5) // Limit to 5 suggestions
+
+  // Handle keyboard navigation for mentions in input field
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (showMentionSuggestions && filteredUsers.length > 0) {
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault()
+          setSelectedMentionIndex(prev => 
+            prev < filteredUsers.length - 1 ? prev + 1 : 0
+          )
+          break
+        case 'ArrowUp':
+          e.preventDefault()
+          setSelectedMentionIndex(prev => 
+            prev > 0 ? prev - 1 : filteredUsers.length - 1
+          )
+          break
+        case 'Enter':
+        case 'Tab':
+          e.preventDefault()
+          handleMentionSelect(filteredUsers[selectedMentionIndex].name)
+          break
+        case 'Escape':
+          setShowMentionSuggestions(false)
+          setMentionQuery('')
+          break
+      }
+    }
+  }
+
+  // Check if message mentions current user
+  const isUserMentioned = (messageContent: string, userName: string) => {
+    return messageContent.includes(`@${userName}`)
+  }
+
+  // Format message content with mention highlights
+  const formatMessageContent = (content: string, isCurrentUserMentioned: boolean) => {
+    // Highlight mentions
+    const mentionRegex = /@(\w+)/g
+    const formattedContent = content.replace(mentionRegex, (match, username) => {
+      const isCurrentUser = username === user?.name
+      return `<span class="${isCurrentUser ? 'bg-blue-600/30 text-blue-300 px-1 rounded font-semibold' : 'bg-yellow-400/20 text-yellow-400 px-1 rounded font-semibold'}">${match}</span>`
+    })
+
+    return { __html: formattedContent }
+  }
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -350,13 +501,11 @@ export default function ChatPage() {
       return
     }
     
-    const sanitizedMessage = sanitizeMessage(trimmedMessage)
-    
     setLoadingStates(prev => ({ ...prev, sendingMessage: true }))
     setError(null)
     
     try {
-      sendMessage(sanitizedMessage)
+      sendMessage(trimmedMessage)
       setMessageInput('')
       
       if (isTyping) {
@@ -379,34 +528,80 @@ export default function ChatPage() {
   }
 
   const handleChannelChange = async (channelId: string) => {
-    // Check if it's a locked room that hasn't been authenticated
-    const isLocked = channelId.startsWith('🔒')
-    const roomName = isLocked ? channelId.substring(2).trim() : channelId
+    // Find the room data to check if it's private
+    const roomData = channels.find(ch => ch.id === channelId)
+    const isPrivateRoom = roomData?.roomType === 'private'
     
-    if (isLocked && !authenticatedRooms.has(channelId)) {
-      // Find the room data to get the actual slug
-      const roomData = channels.find(ch => ch.id === channelId)
-      
-      // Show password prompt
-      setPasswordPromptRoom({ 
-        id: channelId, 
-        name: roomName, 
-        slug: roomData?.slug // Get the slug from room data
-      })
-      setShowPasswordModal(true)
-      return
+    console.log('🔒 Channel change:', { channelId, roomData, isPrivateRoom })
+    
+    if (isPrivateRoom && roomData) {
+      // Check server-side membership status
+      try {
+        const checkResponse = await fetch(`/api/private-rooms/${roomData.slug}/check-membership`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          }
+        })
+        
+        const membershipData = await checkResponse.json()
+        console.log('🔒 Membership check:', membershipData)
+        
+        if (!checkResponse.ok || !membershipData.isMember) {
+          // User is not a member, show password prompt
+          console.log('🔒 User is not a member, showing password prompt')
+          setPasswordPromptRoom({ 
+            id: channelId, 
+            name: roomData.name, 
+            slug: roomData.slug
+          })
+          setShowPasswordModal(true)
+          return
+        }
+        
+        console.log('🔒 User is already a member, allowing access')
+        // User is already a member, allow access
+        setAuthenticatedRooms(prev => new Set([...prev, channelId]))
+      } catch (error) {
+        console.error('🔒 Failed to check membership:', error)
+        // On error, show password prompt to be safe
+        setPasswordPromptRoom({ 
+          id: channelId, 
+          name: roomData.name, 
+          slug: roomData.slug
+        })
+        setShowPasswordModal(true)
+        return
+      }
     }
     
-    setSelectedChannel(channelId)
+    // Find the actual channel data to get the proper slug/ID
+    const targetChannel = channels.find(ch => ch.id === channelId)
+    const actualRoomId = targetChannel?.slug || channelId
+    const roomType = targetChannel?.roomType || 'course'
+    
+    // For private rooms, set selectedChannel to match the actualRoomId that will be used as the currentRoom.roomId
+    // This ensures messages are stored and retrieved with the same key
+    const channelKey = (roomType === 'private') ? actualRoomId : channelId
+    
+    setSelectedChannel(channelKey)
     setSelectedDmUser(null)
+    
+    // Update last read timestamp for this channel
+    setLastReadTimestamps(prev => ({
+      ...prev,
+      [channelKey]: Date.now()
+    }))
+    
+    // Clear unread count for this channel
+    setChannelUnreadCounts(prev => ({
+      ...prev,
+      [channelKey]: 0
+    }))
+    
     if (isConnected) {
-      // Find the actual channel data to get the proper slug/ID
-      const targetChannel = channels.find(ch => ch.id === channelId)
       if (targetChannel) {
-        // For private rooms (locked), use the slug; for course rooms, use the slug
-        const actualRoomId = targetChannel.slug || channelId
-        console.log('Joining channel with actual ID:', actualRoomId, 'from channel:', targetChannel)
-        joinChannel(actualRoomId)
+        console.log('Joining channel with actual ID:', actualRoomId, 'roomType:', roomType, 'from channel:', targetChannel)
+        joinChannel(actualRoomId, roomType)
       } else {
         joinChannel(channelId)
       }
@@ -534,6 +729,67 @@ export default function ChatPage() {
     setShowDeleteConfirm({ show: true, channelId, channelName })
   }
 
+  // Avatar functions
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB
+        setError({ message: 'ファイルサイズが5MBを超えています', type: 'error' })
+        return
+      }
+      
+      setAvatarFile(file)
+      
+      // Create preview
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setAvatarPreview(e.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleRemoveAvatar = async () => {
+    // If it's just a preview, remove it
+    if (avatarPreview && !user?.avatarImage) {
+      setAvatarFile(null)
+      setAvatarPreview(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+      return
+    }
+
+    // If user has an existing avatar, delete it from server
+    if (user?.avatarImage) {
+      try {
+        setLoadingStates(prev => ({ ...prev, sendingMessage: true }))
+        
+        const response = await fetch('/api/user/avatar', {
+          method: 'DELETE',
+          credentials: 'include'
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          updateUser(data.user)
+          setError({ message: 'アバター画像を削除しました', type: 'info' })
+        }
+      } catch (error) {
+        setError({ message: 'アバターの削除に失敗しました', type: 'error' })
+      } finally {
+        setLoadingStates(prev => ({ ...prev, sendingMessage: false }))
+      }
+    }
+    
+    // Clear preview states
+    setAvatarFile(null)
+    setAvatarPreview(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
   const handleSaveProfile = async () => {
     const trimmedName = newUserName.trim()
     
@@ -542,23 +798,55 @@ export default function ChatPage() {
       return
     }
     
-    if (trimmedName === user?.name) {
-      setShowProfileModal(false)
-      return
-    }
-    
     setLoadingStates(prev => ({ ...prev, sendingMessage: true }))
     setError(null)
     
     try {
-      const response = await authApi.updateProfile({ name: trimmedName })
+      // First upload avatar if there's a file
+      if (avatarFile) {
+        const formData = new FormData()
+        formData.append('avatar', avatarFile)
+        
+        const uploadResponse = await fetch('/api/user/avatar', {
+          method: 'POST',
+          body: formData,
+          credentials: 'include'
+        })
+        
+        if (!uploadResponse.ok) {
+          throw new Error('アバターのアップロードに失敗しました')
+        }
+        
+        const uploadData = await uploadResponse.json()
+        if (uploadData.user) {
+          // Update user state with new avatar image
+          updateUser(uploadData.user)
+        }
+      }
+      
+      // Update profile data
+      const updateData: any = { name: trimmedName }
+      if (selectedAvatarColor) {
+        updateData.avatarColor = selectedAvatarColor
+        updateData.avatarImage = null // Clear image when color is selected
+      }
+      
+      const response = await authApi.updateProfile(updateData)
       if (response.data.user) {
+        // Update local user state immediately
+        updateUser(response.data.user)
+        
         setShowProfileModal(false)
-        setError({ message: '名前を更新しました', type: 'info' })
+        setError({ message: 'プロフィールを更新しました', type: 'info' })
+        
+        // Reset avatar states
+        setAvatarFile(null)
+        setAvatarPreview(null)
+        setSelectedAvatarColor('')
       }
     } catch (err: any) {
       setError({ 
-        message: err.response?.data?.error || '名前の更新に失敗しました', 
+        message: err.response?.data?.error || 'プロフィールの更新に失敗しました', 
         type: 'error' 
       })
     } finally {
@@ -588,27 +876,49 @@ export default function ChatPage() {
       })
 
       if (response.ok) {
-        // Add to authenticated rooms
-        const newAuthenticatedRooms = new Set([...authenticatedRooms, passwordPromptRoom.id])
-        setAuthenticatedRooms(newAuthenticatedRooms)
+        const data = await response.json()
         
-        // Save to localStorage for persistence
-        localStorage.setItem('authenticatedRooms', JSON.stringify([...newAuthenticatedRooms]))
+        // Now join the private room as a member
+        const roomSlug = passwordPromptRoom.slug || passwordPromptRoom.name.toLowerCase().replace(/\s+/g, '-')
         
-        // Join the room
-        setSelectedChannel(passwordPromptRoom.id)
-        setSelectedDmUser(null)
-        if (isConnected) {
-          // Use the actual room slug for socket connection
-          const roomSlug = passwordPromptRoom.slug || passwordPromptRoom.name.toLowerCase().replace(/\s+/g, '-')
-          joinChannel(passwordPromptRoom.id) // Use the channel ID (with lock emoji) for frontend display
+        try {
+          const joinResponse = await fetch(`/api/private-rooms/${data.roomId}/join`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+            },
+            body: JSON.stringify({
+              accessKey: roomPassword
+            })
+          })
+          
+          if (joinResponse.ok) {
+            // Add to authenticated rooms (session only, no localStorage)
+            const newAuthenticatedRooms = new Set(Array.from(authenticatedRooms).concat([passwordPromptRoom.id]))
+            setAuthenticatedRooms(newAuthenticatedRooms)
+            
+            // Join the room - use roomSlug as selectedChannel since that's what currentRoom.roomId will be
+            setSelectedChannel(roomSlug)
+            setSelectedDmUser(null)
+            if (isConnected) {
+              // Use private room type for socket connection
+              joinChannel(roomSlug, 'private')
+            }
+            
+            // Close modal and reset state
+            setShowPasswordModal(false)
+            setPasswordPromptRoom(null)
+            setRoomPassword('')
+            setError({ message: 'ルームに参加しました', type: 'info' })
+          } else {
+            const joinData = await joinResponse.json()
+            setError({ message: joinData.error || 'ルームへの参加に失敗しました', type: 'error' })
+          }
+        } catch (joinError) {
+          console.error('Failed to join room:', joinError)
+          setError({ message: 'ルームへの参加に失敗しました', type: 'error' })
         }
-        
-        // Close modal and reset state
-        setShowPasswordModal(false)
-        setPasswordPromptRoom(null)
-        setRoomPassword('')
-        setError({ message: 'ルームに参加しました', type: 'info' })
       } else {
         const data = await response.json()
         setError({ message: data.error || 'パスワードが正しくありません', type: 'error' })
@@ -649,14 +959,13 @@ export default function ChatPage() {
       if (showChannelModal) setShowChannelModal(false)
       if (showProfileModal) setShowProfileModal(false)
       if (showDeleteConfirm.show) setShowDeleteConfirm({ show: false, channelId: '', channelName: '' })
-      if (showUsersSidebar) setShowUsersSidebar(false)
       if (showPasswordModal) {
         setShowPasswordModal(false)
         setPasswordPromptRoom(null)
         setRoomPassword('')
       }
     }
-  }, [showChannelModal, showProfileModal, showDeleteConfirm.show, showUsersSidebar, showPasswordModal])
+  }, [showChannelModal, showProfileModal, showDeleteConfirm.show, showPasswordModal])
   
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown)
@@ -718,15 +1027,6 @@ export default function ChatPage() {
       </div>
 
       {/* Back to Dashboard Button */}
-      <div className="absolute top-4 left-16 md:left-4 z-40">
-        <Link 
-          href="/dashboard"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-black/40 backdrop-blur-sm text-gray-400 hover:text-white border border-gray-700 rounded-lg shadow-sm hover:shadow-md transition-all"
-        >
-          <span className="hidden sm:inline">← ダッシュボードに戻る</span>
-          <span className="sm:hidden">← 戻る</span>
-        </Link>
-      </div>
 
       {/* Sidebar Overlay */}
       {sidebarOpen && (
@@ -796,86 +1096,38 @@ export default function ChatPage() {
                     <div className="font-medium">{channel.name}</div>
                     <div className="text-xs text-gray-400 mt-0.5">{channel.description}</div>
                   </div>
+                  {channelUnreadCounts[channel.id] > 0 && (
+                    <div className="bg-red-500 text-white text-xs rounded-full px-2 py-1 min-w-[20px] h-5 flex items-center justify-center font-semibold">
+                      {channelUnreadCounts[channel.id]}
+                    </div>
+                  )}
                 </button>
-                {isAdmin && channel.id !== 'general' && (
-                  <button
-                    onClick={() => confirmDeleteChannel(channel.id, channel.name)}
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 p-1 hover:bg-red-500/20 rounded transition-all"
-                    title="チャンネルを削除"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                )}
               </div>
             ))}
           </div>
 
-          {/* Direct Messages Section */}
+          {/* Direct Messages Link */}
           <div className="px-3 py-4 border-t border-gray-700">
-            <div className="flex items-center justify-between px-2 mb-3">
-              <span className="text-xs uppercase font-semibold text-gray-400 tracking-wide">ダイレクトメッセージ</span>
-            </div>
-            
-            <div className="space-y-2">
-              {roomOnlineUsers.filter(u => u.userId !== user?.id).map(onlineUser => (
-                <button
-                  key={onlineUser.userId}
-                  onClick={() => handleStartDM(onlineUser.userId)}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all text-left ${
-                    selectedDmUser === onlineUser.userId 
-                      ? 'bg-blue-50 text-blue-400 shadow-sm border border-blue-200' 
-                      : 'text-gray-400 hover:bg-gray-700 hover:text-white'
-                  }`}
-                >
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-xs font-bold">
-                    {onlineUser.userName.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium">{onlineUser.userName}</div>
-                  </div>
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                </button>
-              ))}
-              
-              {roomOnlineUsers.filter(u => u.userId !== user?.id).length === 0 && (
-                <div className="text-xs text-gray-500 px-2">
-                  他のオンラインユーザーがいません
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Online Users */}
-          <div className="px-3 py-4 border-t border-gray-700">
-            <div className="flex items-center justify-between px-2 mb-3">
-              <span className="text-xs uppercase font-semibold text-gray-400 tracking-wide">オンライン</span>
-              <span className="text-xs text-gray-500">{roomOnlineUsers.length}</span>
-            </div>
-            
-            <div className="space-y-2">
-              {roomOnlineUsers.map(onlineUser => (
-                <div key={onlineUser.userId} className="flex items-center gap-2 px-2">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-400 to-amber-600 flex items-center justify-center text-white text-sm font-bold">
-                    {onlineUser.userName.charAt(0).toUpperCase()}
-                  </div>
-                  <span className="text-sm text-gray-300">{onlineUser.userName}</span>
-                  {onlineUser.userRole === 'INSTRUCTOR' && (
-                    <span className="text-xs bg-yellow-400/20 text-yellow-400 px-1.5 py-0.5 rounded">講師</span>
-                  )}
-                </div>
-              ))}
-            </div>
+            <Link
+              href="/dm"
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span className="text-sm font-medium">ダイレクトメッセージ</span>
+            </Link>
           </div>
         </div>
 
         {/* User Info */}
         <div className="px-3 py-3 border-t border-gray-700 bg-gray-800/50">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-400 to-amber-600 flex items-center justify-center text-white text-sm font-bold">
-              {user?.name?.charAt(0).toUpperCase() || 'U'}
-            </div>
+            <Avatar user={{
+              name: user?.user?.name || user?.name || 'U',
+              avatarColor: user?.user?.avatarColor || user?.avatarColor,
+              avatarImage: user?.user?.avatarImage || user?.avatarImage
+            }} size="md" />
             <div className="flex-1 min-w-0">
-              <div className="font-medium text-white truncate">{user?.name}</div>
+              <div className="font-medium text-white truncate">{user?.user?.name || user?.name}</div>
               <div className="text-xs text-gray-400">
                 {isConnected ? (
                   <span className="flex items-center gap-1">
@@ -893,6 +1145,9 @@ export default function ChatPage() {
             <button
               onClick={() => {
                 setNewUserName(user?.name || '')
+                setSelectedAvatarColor(user?.avatarColor || '')
+                setAvatarFile(null)
+                setAvatarPreview(null)
                 setShowProfileModal(true)
               }}
               className="text-gray-400 hover:text-white p-1 hover:bg-gray-700 rounded-md transition"
@@ -907,60 +1162,6 @@ export default function ChatPage() {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col bg-black/30 backdrop-blur-sm md:ml-0">
         
-        {/* Users Sidebar Overlay */}
-        {showUsersSidebar && (
-          <div 
-            className="fixed inset-0 bg-black/50 z-30"
-            onClick={() => setShowUsersSidebar(false)}
-          />
-        )}
-        
-        {/* Users Sidebar */}
-        {showUsersSidebar && (
-          <div className="fixed right-0 top-0 h-full w-80 bg-black/80 backdrop-blur-sm border-l border-gray-700 shadow-lg z-40 flex flex-col">
-            <div className="h-16 px-4 flex items-center justify-between border-b border-gray-700 mt-12">
-              <h3 className="text-white font-bold flex items-center gap-2">
-                <Users className="w-5 h-5 text-yellow-400" />
-                オンラインユーザー
-              </h3>
-              <button
-                onClick={() => setShowUsersSidebar(false)}
-                className="text-gray-400 hover:text-white p-1 hover:bg-gray-700 rounded-md transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="space-y-3">
-                {roomOnlineUsers.map(onlineUser => (
-                  <div key={onlineUser.userId} className="flex items-center gap-3 p-2 hover:bg-gray-700 rounded-lg transition">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-400 to-amber-600 flex items-center justify-center text-white font-bold">
-                      {onlineUser.userName.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-white font-medium">{onlineUser.userName}</div>
-                      <div className="flex items-center gap-1 text-xs text-gray-400">
-                        <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                        オンライン
-                      </div>
-                    </div>
-                    {onlineUser.userRole === 'INSTRUCTOR' && (
-                      <span className="text-xs bg-yellow-400/20 text-yellow-400 px-2 py-1 rounded-full">講師</span>
-                    )}
-                  </div>
-                ))}
-                
-                {roomOnlineUsers.length === 0 && (
-                  <div className="text-center text-gray-400 mt-8">
-                    <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>オンラインユーザーがいません</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
         {/* Channel Header */}
         <div className="h-16 px-4 md:px-6 flex items-center justify-between border-b border-gray-700 bg-black/40 backdrop-blur-sm shadow-sm mt-12">
           <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -968,7 +1169,7 @@ export default function ChatPage() {
             <div className="min-w-0">
               <span className="font-bold text-white text-base md:text-lg truncate block">
                 {selectedDmUser ? 
-                  roomOnlineUsers.find(u => u.userId === selectedDmUser)?.userName || 'DM' 
+                  'DM' 
                   : selectedChannel
                 }
               </span>
@@ -981,18 +1182,22 @@ export default function ChatPage() {
             </div>
           </div>
           
-          <div className="flex items-center gap-1 md:gap-3">
-            <button 
-              className={`p-2 rounded-lg transition ${
-                showUsersSidebar 
-                  ? 'text-yellow-400 bg-yellow-400/10' 
-                  : 'text-gray-400 hover:text-yellow-400 hover:bg-yellow-400/10'
-              }`}
-              title="メンバー一覧"
-              onClick={() => setShowUsersSidebar(!showUsersSidebar)}
+          {/* Navigation Links */}
+          <div className="flex items-center gap-2">
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors"
             >
-              <Users className="w-5 h-5" />
-            </button>
+              <Home size={16} />
+              <span className="hidden lg:inline text-sm">ダッシュボード</span>
+            </Link>
+            <Link
+              href="/videos"
+              className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            >
+              <BookOpen size={16} />
+              <span className="hidden lg:inline text-sm">講習</span>
+            </Link>
           </div>
         </div>
 
@@ -1006,7 +1211,7 @@ export default function ChatPage() {
                 </div>
                 <h3 className="text-xl font-bold text-white mb-2">
                   {selectedDmUser ? 
-                    `${roomOnlineUsers.find(u => u.userId === selectedDmUser)?.userName}とのDM` 
+                    `DM` 
                     : `#${selectedChannel} へようこそ`
                   }
                 </h3>
@@ -1018,37 +1223,83 @@ export default function ChatPage() {
                 </p>
               </div>
             ) : (
-              messages.map((message) => (
-                <div key={message.id} className="flex gap-2 md:gap-4 hover:bg-gray-800 px-2 md:px-3 py-2 rounded-xl transition group">
-                  <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-yellow-400 to-amber-600 flex items-center justify-center flex-shrink-0 shadow-md">
-                    <span className="text-white font-bold text-xs md:text-sm">
-                      {message.userName.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2 md:gap-3 mb-1 flex-wrap">
-                      <span className="font-bold text-white text-sm md:text-base">{message.userName}</span>
-                      <span className="text-xs text-gray-400">
-                        {formatTime(message.createdAt)}
-                      </span>
-                      {message.userRole === 'INSTRUCTOR' && (
-                        <span className="text-xs bg-gradient-to-r from-yellow-400 to-amber-600 text-white px-1.5 md:px-2 py-0.5 md:py-1 rounded-full shadow-sm">
-                          講師
-                        </span>
+              messages.map((message) => {
+                const isCurrentUserMentioned = user ? isUserMentioned(message.content, user.name) : false
+                const isOwnMessage = user && message.userId === user.id
+                
+                return (
+                <div 
+                  key={message.id} 
+                  className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'} mb-2 md:mb-4`}
+                >
+                  <div className={`flex gap-2 md:gap-4 max-w-[75%] px-2 md:px-3 py-2 rounded-xl transition group ${
+                    isCurrentUserMentioned ? 'bg-blue-600/10 border-l-4 border-blue-500' : 
+                    isOwnMessage ? '' : 'hover:bg-gray-800'
+                  } ${isOwnMessage ? 'flex-row-reverse' : 'flex-row'}`}>
+                    {/* Avatar (only for other user's messages) */}
+                    {!isOwnMessage && (
+                      <Avatar 
+                        user={{ 
+                          name: message.userName,
+                          avatarColor: message.avatarColor,
+                          avatarImage: message.avatarImage
+                        }} 
+                        size="lg" 
+                        className="md:w-10 md:h-10 shadow-md flex-shrink-0"
+                      />
+                    )}
+                    
+                    <div className="flex-1 min-w-0">
+                      {/* Header (only for other user's messages or mentions) */}
+                      {(!isOwnMessage || isCurrentUserMentioned) && (
+                        <div className="flex items-baseline gap-2 md:gap-3 mb-1 flex-wrap">
+                          {!isOwnMessage && (
+                            <span className="font-bold text-white text-sm md:text-base">{message.userName}</span>
+                          )}
+                          <span className="text-xs text-gray-400">
+                            {formatTime(message.createdAt)}
+                          </span>
+                          {message.userRole === 'INSTRUCTOR' && (
+                            <span className="text-xs bg-gradient-to-r from-yellow-400 to-amber-600 text-white px-1.5 md:px-2 py-0.5 md:py-1 rounded-full shadow-sm">
+                              講師
+                            </span>
+                          )}
+                          {isCurrentUserMentioned && (
+                            <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full shadow-sm animate-pulse">
+                              メンションされました
+                            </span>
+                          )}
+                        </div>
                       )}
-                    </div>
-                    <div className="text-gray-300 leading-relaxed text-sm md:text-base">
-                      {message.type === 'ANNOUNCEMENT' && (
-                        <span className="text-yellow-400 font-semibold mr-1">📢</span>
-                      )}
-                      {message.type === 'QUESTION' && (
-                        <span className="text-blue-400 font-semibold mr-1">❓</span>
-                      )}
-                      <span className="break-words" dangerouslySetInnerHTML={{ __html: processMentions(message.content) }}></span>
+                      
+                      {/* Message content */}
+                      <div className={`px-3 py-2 md:px-4 md:py-2 text-sm md:text-base ${
+                        isOwnMessage
+                          ? 'bg-blue-600 text-white rounded-tl-lg rounded-tr-lg rounded-bl-lg rounded-br-sm'
+                          : 'bg-gray-700 text-gray-300 rounded-tl-lg rounded-tr-lg rounded-bl-sm rounded-br-lg'
+                      }`}>
+                        {message.type === 'ANNOUNCEMENT' && (
+                          <span className="text-yellow-400 font-semibold mr-1">📢</span>
+                        )}
+                        {message.type === 'QUESTION' && (
+                          <span className="text-blue-400 font-semibold mr-1">❓</span>
+                        )}
+                        <span 
+                          className="break-words leading-relaxed"
+                          dangerouslySetInnerHTML={formatMessageContent(message.content, isCurrentUserMentioned)}
+                        />
+                        {/* Own message timestamp */}
+                        {isOwnMessage && (
+                          <div className="text-xs text-blue-200 mt-1 text-right">
+                            {formatTime(message.createdAt)}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              ))
+              )
+              })
             )}
             
             {/* Typing Indicator */}
@@ -1106,8 +1357,9 @@ export default function ChatPage() {
                 type="text"
                 value={messageInput}
                 onChange={handleInputChange}
+                onKeyDown={handleInputKeyDown}
                 placeholder={selectedDmUser ? 
-                  `${roomOnlineUsers.find(u => u.userId === selectedDmUser)?.userName}にメッセージを送信... (@ユーザー名 でメンション)` 
+                  `メッセージを送信... (@ユーザー名 でメンション)` 
                   : `#${selectedChannel} にメッセージを送信... (@ユーザー名 でメンション)`
                 }
                 className="w-full bg-gray-800 border border-gray-600 text-white px-3 md:px-4 py-2 md:py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-amber-500 transition shadow-sm text-sm md:text-base pr-12"
@@ -1118,41 +1370,37 @@ export default function ChatPage() {
                 {messageInput.length}/1000
               </div>
               
-              {/* Mention suggestions */}
-              {messageInput.includes('@') && messageInput.split('@').pop() && (
-                <div className="absolute bottom-full mb-2 left-0 right-0 bg-gray-800 border border-gray-600 rounded-lg shadow-lg max-h-32 overflow-y-auto z-10">
-                  {roomOnlineUsers
-                    .filter(onlineUser => 
-                      onlineUser.userName.toLowerCase().includes(messageInput.split('@').pop()!.toLowerCase()) &&
-                      onlineUser.userId !== user?.id
-                    )
-                    .slice(0, 5)
-                    .map(mentionUser => (
-                      <button
-                        key={mentionUser.userId}
-                        onClick={() => {
-                          const parts = messageInput.split('@')
-                          parts[parts.length - 1] = mentionUser.userName + ' '
-                          setMessageInput(parts.join('@'))
-                        }}
-                        className="w-full text-left px-3 py-2 hover:bg-gray-700 flex items-center gap-2 text-sm"
-                      >
-                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-yellow-400 to-amber-600 flex items-center justify-center text-white text-xs font-bold">
-                          {mentionUser.userName.charAt(0).toUpperCase()}
+              {/* Mention Suggestions Dropdown */}
+              {showMentionSuggestions && filteredUsers.length > 0 && (
+                <div className="absolute bottom-full left-0 right-0 mb-2 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-50 max-h-40 overflow-y-auto">
+                  {filteredUsers.map((user, index) => (
+                    <button
+                      key={user.id}
+                      type="button"
+                      onClick={() => handleMentionSelect(user.name)}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-700 focus:bg-gray-700 focus:outline-none transition ${
+                        index === selectedMentionIndex ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      <Avatar user={{
+                        name: user.name,
+                        avatarColor: user.avatarColor,
+                        avatarImage: user.avatarImage
+                      }} size="sm" className="w-6 h-6" />
+                      <div>
+                        <div className="text-white text-sm font-medium">{user.name}</div>
+                        <div className="text-xs text-gray-400">
+                          {user.role === 'ADMIN' ? '管理者' : user.role === 'INSTRUCTOR' ? '講師' : '生徒'}
                         </div>
-                        <span className="text-white">{mentionUser.userName}</span>
-                        {mentionUser.userRole === 'INSTRUCTOR' && (
-                          <span className="text-xs bg-yellow-400/20 text-yellow-400 px-1.5 py-0.5 rounded">講師</span>
-                        )}
-                      </button>
-                    ))
-                  }
+                      </div>
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
             <button
               type="submit"
-              disabled={!messageInput.trim() || !isConnected || loadingStates.sendingMessage}
+              disabled={!messageInput.trim() || loadingStates.sendingMessage}
               className="px-3 md:px-4 py-2 md:py-3 bg-gradient-to-r from-yellow-400 to-amber-600 text-white rounded-xl hover:from-yellow-500 hover:to-amber-700 focus:outline-none focus:ring-2 focus:ring-yellow-400 transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {loadingStates.sendingMessage ? (
@@ -1242,49 +1490,6 @@ export default function ChatPage() {
       </div>
     )}
 
-    {/* Delete Confirmation Modal */}
-    {showDeleteConfirm.show && (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div 
-          ref={deleteConfirmRef}
-          tabIndex={-1}
-          className="bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-700 focus:outline-none"
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <AlertTriangle className="w-6 h-6 text-red-400" />
-            <h3 className="text-white font-bold text-lg">チャンネルを削除</h3>
-          </div>
-          
-          <p className="text-gray-300 mb-6">
-            本当に「{showDeleteConfirm.channelName}」チャンネルを削除しますか？
-          </p>
-          
-          <div className="flex gap-3">
-            <button
-              onClick={() => setShowDeleteConfirm({ show: false, channelId: '', channelName: '' })}
-              disabled={loadingStates.deletingChannel}
-              className="flex-1 px-4 py-2 text-gray-400 hover:text-white border border-gray-600 hover:border-gray-500 rounded-lg transition disabled:opacity-50"
-            >
-              キャンセル
-            </button>
-            <button
-              onClick={() => handleDeleteChannel(showDeleteConfirm.channelId)}
-              disabled={loadingStates.deletingChannel}
-              className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {loadingStates.deletingChannel ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  削除中...
-                </>
-              ) : (
-                '削除'
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
     
     {/* Profile Edit Modal */}
     {showProfileModal && (
@@ -1297,9 +1502,52 @@ export default function ChatPage() {
           <h3 className="text-white font-bold text-lg mb-4">プロフィール設定</h3>
           
           <div className="space-y-4">
-            <div className="flex justify-center mb-4">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-yellow-400 to-amber-600 flex items-center justify-center text-white text-xl font-bold">
-                {user?.name?.charAt(0).toUpperCase() || 'U'}
+            <div className="flex flex-col items-center mb-4">
+              <div className="relative mb-3">
+                {avatarPreview ? (
+                  <div className="w-16 h-16 rounded-full overflow-hidden">
+                    <img
+                      src={avatarPreview}
+                      alt="アバタープレビュー"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <Avatar
+                    user={{
+                      name: user?.name || '',
+                      avatarColor: selectedAvatarColor || user?.avatarColor,
+                      avatarImage: user?.avatarImage
+                    }}
+                    size="xl"
+                  />
+                )}
+              </div>
+              
+              <div className="flex gap-2">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  accept="image/*"
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm flex items-center gap-2"
+                >
+                  <Upload className="w-4 h-4" />
+                  画像アップロード
+                </button>
+                {(avatarPreview || user?.avatarImage) && (
+                  <button
+                    onClick={handleRemoveAvatar}
+                    className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm flex items-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    削除
+                  </button>
+                )}
               </div>
             </div>
             
@@ -1323,32 +1571,29 @@ export default function ChatPage() {
                 アバターカラー
               </label>
               <div className="flex gap-2 flex-wrap">
-                {['from-yellow-400 to-amber-600', 'from-blue-400 to-blue-600', 'from-green-400 to-green-600', 'from-red-400 to-red-600', 'from-purple-400 to-purple-600', 'from-pink-400 to-pink-600'].map((gradient) => (
+                {[
+                  'from-yellow-400 to-amber-600',
+                  'from-blue-400 to-blue-600',
+                  'from-green-400 to-green-600',
+                  'from-red-400 to-red-600',
+                  'from-purple-400 to-purple-600',
+                  'from-pink-400 to-pink-600',
+                  'from-indigo-400 to-indigo-600',
+                  'from-teal-400 to-teal-600'
+                ].map((gradient) => (
                   <button
                     key={gradient}
-                    className={`w-8 h-8 rounded-full bg-gradient-to-br ${gradient} border-2 border-transparent hover:border-white transition`}
+                    onClick={() => setSelectedAvatarColor(gradient)}
+                    className={`w-8 h-8 rounded-full bg-gradient-to-br ${gradient} border-2 transition ${
+                      selectedAvatarColor === gradient
+                        ? 'border-white'
+                        : 'border-transparent hover:border-gray-400'
+                    }`}
                   />
                 ))}
               </div>
             </div>
             
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                通知音
-              </label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={playNotificationSound}
-                  onChange={(e) => setPlayNotificationSound(e.target.checked)}
-                  className="rounded border-gray-600 bg-gray-700 text-yellow-400 focus:ring-yellow-400"
-                  id="notification-sound"
-                />
-                <label htmlFor="notification-sound" className="text-gray-300">
-                  新しいメッセージで音を再生
-                </label>
-              </div>
-            </div>
           </div>
           
           <div className="flex gap-3 mt-6">

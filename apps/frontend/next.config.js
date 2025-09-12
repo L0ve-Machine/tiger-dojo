@@ -1,11 +1,20 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: ['localhost', 'via.placeholder.com', 'images.unsplash.com'],
+    domains: ['localhost', 'via.placeholder.com', 'images.unsplash.com', 'trade-dojo-fx.com'],
   },
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://trade-dojo-fx.com:5000',
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || 'http://trade-dojo-fx.com',
+  },
+  async redirects() {
+    return [
+      {
+        source: '/login',
+        destination: '/auth/login',
+        permanent: true,
+      },
+    ]
   },
   async rewrites() {
     return [

@@ -4,6 +4,7 @@ import helmet from 'helmet'
 import cookieParser from 'cookie-parser'
 import rateLimit from 'express-rate-limit'
 import dotenv from 'dotenv'
+import path from 'path'
 import { PrismaClient } from '@prisma/client'
 import { createServer } from 'http'
 import { SocketServer } from './socket'
@@ -19,6 +20,8 @@ import userRoutes from './routes/user.routes'
 import dashboardRoutes from './routes/dashboard.routes'
 import vimeoRoutes from './routes/vimeo.routes'
 import privateRoomRoutes from './routes/private-room.routes'
+import dmRoutes from './routes/dm.routes'
+import chatRoutes from './routes/chat.routes'
 
 dotenv.config()
 
@@ -36,8 +39,7 @@ app.use(cors({
   credentials: true,
 }))
 app.use(express.json({ 
-  limit: '10mb',
-  type: 'application/json'
+  limit: '10mb'
 }))
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
@@ -57,11 +59,11 @@ if (process.env.NODE_ENV === 'production') {
   app.use(limiter)
 }
 
-// Stricter rate limiting for auth routes (disabled in development)
+// Stricter rate limiting for auth routes (very relaxed limits)
 const authLimiter = process.env.NODE_ENV === 'production' 
   ? rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 10000, // Increased to 10000 attempts per 15 minutes in production
+      max: 100000, // Very high limit - 100000 attempts per 15 minutes
       message: {
         error: 'Too many authentication attempts, please try again later.'
       },
@@ -83,6 +85,11 @@ app.use('/api/user', userRoutes)
 app.use('/api/dashboard', dashboardRoutes)
 app.use('/api/vimeo', vimeoRoutes)
 app.use('/api/private-rooms', privateRoomRoutes)
+app.use('/api/dm', dmRoutes)
+app.use('/api/chat', chatRoutes)
+
+// Serve uploaded files statically
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
 
 // Health check
 app.get('/health', (req, res) => {

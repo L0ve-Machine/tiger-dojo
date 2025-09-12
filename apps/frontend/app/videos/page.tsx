@@ -374,8 +374,8 @@ function LessonCard({ lesson }: { lesson: Lesson }) {
         return lesson.releaseDate ? new Date(lesson.releaseDate).toLocaleDateString('ja-JP') : '日付未設定'
       case 'PREREQUISITE':
         return '前提条件あり'
-      case 'HIDDEN':
-        return '非公開'
+      // case 'HIDDEN':
+      //   return '非公開'
       default:
         return '視聴可能'
     }
