@@ -47,7 +47,11 @@
       "Bash(echo $NODE_ENV)",
       "Bash(sudo systemctl:*)",
       "Bash(pm2 delete:*)",
-      "Bash(PORT=5000 NODE_ENV=production pm2 start --name \"backend-new\" \"npx tsx src/index.ts\")"
+      "Bash(PORT=5000 NODE_ENV=production pm2 start --name \"backend-new\" \"npx tsx src/index.ts\")",
+      "Bash(apt:*)",
+      "Bash(apt install:*)",
+      "Bash(certbot:*)",
+      "Bash(nginx:*)"
     ],
     "deny": [],
     "ask": []

@@ -21,99 +21,101 @@ export default function TermsPage() {
           <section>
             <h2 className="text-2xl font-semibold text-white mb-4">第1条（適用）</h2>
             <p className="leading-relaxed">
-              本規約は、FXトレード道場（以下「当サービス」）が提供するオンライン学習サービスの利用条件を定めるものです。
-              登録ユーザーの皆様（以下「ユーザー」）には、本規約に従って、本サービスをご利用いただきます。
+              本規約は、FXトレード道場（以下「当サロン」といいます）が提供するプレミアム会員向け動画配信サイト（以下「本サイト」といいます）の利用条件を定めるものです。会員は、本規約に同意のうえ本サイトを利用するものとします。
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-white mb-4">第2条（利用登録）</h2>
+            <h2 className="text-2xl font-semibold text-white mb-4">第2条（利用対象者）</h2>
             <p className="leading-relaxed mb-4">
-              登録希望者が当社の定める方法によって利用登録を申請し、当社がこれを承認することによって、利用登録が完了するものとします。
+              1. 本サイトは、当サロンのプレミアムプランに入会した会員のみが利用できます。
             </p>
             <p className="leading-relaxed">
-              当社は、以下のいずれかに該当する場合、利用登録の申請を承認しないことがあります：
+              2. プレミアムプラン退会と同時に、本サイトへのログイン権限および動画の閲覧権限は失効します。
             </p>
-            <ul className="list-disc ml-6 mt-2 space-y-1">
-              <li>虚偽の事項を届け出た場合</li>
-              <li>本規約に違反したことがある者からの申請である場合</li>
-              <li>その他、当社が利用登録を相当でないと判断した場合</li>
+          </section>
+
+          <section>
+            <h2 className="text-2xl font-semibold text-white mb-4">第3条（禁止事項）</h2>
+            <p className="leading-relaxed mb-4">会員は、本サイトの利用にあたり、以下の行為を行ってはなりません。</p>
+            <ul className="list-decimal ml-6 space-y-1">
+              <li>本サイトに掲載された動画・講習の録画、ダウンロード、スクリーンショット、その他複製・保存行為</li>
+              <li>本サイトのコンテンツを第三者に共有、SNS等外部へ流出させる行為</li>
+              <li>アカウントを第三者に貸与、譲渡、共有する行為</li>
+              <li>本サイトで配信されるコンテンツを模倣し、類似の講習や動画を制作・販売・配信する行為</li>
+              <li>本サイトで得た情報を第三者に発信・公開する行為</li>
+              <li>法令または公序良俗に反する行為</li>
             </ul>
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-white mb-4">第3条（利用料金および支払方法）</h2>
+            <h2 className="text-2xl font-semibold text-white mb-4">第4条（違反時の措置）</h2>
+            <p className="leading-relaxed mb-4">
+              1. 会員が前条の禁止事項に違反した場合、当サロンは直ちに会員資格を停止・退会処分とし、本サイトへのアクセスを停止します。
+            </p>
             <p className="leading-relaxed">
-              ユーザーは、本サービスの有料部分の対価として、当社が別途定め、ウェブサイトに表示する利用料金を、
-              当社が指定する方法により支払うものとします。
+              2. 違反内容に応じて、当サロンは損害賠償請求、法的措置を講じる場合があります。
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-white mb-4">第4条（禁止事項）</h2>
-            <p className="leading-relaxed mb-4">ユーザーは、本サービスの利用にあたり、以下の行為をしてはなりません：</p>
-            <ul className="list-disc ml-6 space-y-1">
-              <li>法令または公序良俗に違反する行為</li>
-              <li>犯罪行為に関連する行為</li>
-              <li>当社のサーバーまたはネットワークの機能を破壊したり、妨害したりする行為</li>
-              <li>当社のサービスの運営を妨害するおそれのある行為</li>
-              <li>他のユーザーに関する個人情報等を収集または蓄積する行為</li>
-              <li>他のユーザーに成りすます行為</li>
-              <li>当社のサービスに関連して、反社会的勢力に対して直接または間接に利益を供与する行為</li>
-              <li>その他、当社が不適切と判断する行為</li>
-            </ul>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold text-white mb-4">第5条（本サービスの提供の停止等）</h2>
+            <h2 className="text-2xl font-semibold text-white mb-4">第5条（利用料金と支払い）</h2>
+            <p className="leading-relaxed mb-4">
+              1. 本サイトの利用は、当サロンのプレミアムプランの会費に含まれます。
+            </p>
+            <p className="leading-relaxed mb-4">
+              2. 会費の支払いが滞った場合、当サロンは会員資格を停止・退会処分とし、本サイトへのアクセスを停止します。
+            </p>
             <p className="leading-relaxed">
-              当社は、以下のいずれかの事由があると判断した場合、ユーザーに事前に通知することなく本サービスの全部または一部の提供を停止または中断することができるものとします。
+              3. 支払い後の返金は、個別の事情により当サロンが認める場合を除き、原則として行いません。
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-white mb-4">第6条（著作権）</h2>
+            <h2 className="text-2xl font-semibold text-white mb-4">第6条（退会・再入会）</h2>
+            <p className="leading-relaxed mb-4">
+              1. 会員は、当サロンの定める手続により退会できます。
+            </p>
             <p className="leading-relaxed">
-              本サービスで提供される全てのコンテンツ（講習、テキスト、画像等）の著作権は当社に帰属します。
-              ユーザーは、個人的な学習目的以外でこれらのコンテンツを使用、複製、配布することはできません。
+              2. 原則として退会後の再入会は認めません。ただし、特別な事情により当サロンが認めた場合、一定期間の休止措置をとることがあります。
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-white mb-4">第7条（免責事項）</h2>
+            <h2 className="text-2xl font-semibold text-white mb-4">第7条（知的財産権）</h2>
             <p className="leading-relaxed">
-              当社は、本サービスに事実上または法律上の瑕疵（安全性、信頼性、正確性、完全性、有効性、特定の目的への適合性、セキュリティなどに関する欠陥、エラーやバグ、権利侵害などを含みます。）がないことを明示的にも黙示的にも保証しておりません。
-            </p>
-            <p className="leading-relaxed mt-4">
-              投資に関する最終的な判断は、ユーザー自身の責任において行うものとし、当社は投資結果について一切の責任を負いません。
+              本サイトで提供される全ての動画、講習、資料、画像、音声、テキストその他一切のコンテンツに関する著作権等の知的財産権は、当サロンまたは正当な権利者に帰属します。会員は、当サロンの事前の承諾なく、これらを複製、転載、配布、改変、販売、公衆送信等することはできません。
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-white mb-4">第8条（サービス内容の変更等）</h2>
+            <h2 className="text-2xl font-semibold text-white mb-4">第8条（免責事項）</h2>
+            <p className="leading-relaxed mb-4">
+              1. 本サイトの利用により会員に生じた損害について、当サロンは一切の責任を負いません。
+            </p>
             <p className="leading-relaxed">
-              当社は、ユーザーに通知することなく、本サービスの内容を変更しまたは本サービスの提供を中止することができるものとし、これによってユーザーに生じた損害について一切の責任を負いません。
+              2. 本サイトの提供は、システム障害、天災地変、通信環境等により一時的に中断されることがあります。
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-white mb-4">第9条（利用規約の変更）</h2>
+            <h2 className="text-2xl font-semibold text-white mb-4">第9条（規約の変更）</h2>
             <p className="leading-relaxed">
-              当社は、必要と判断した場合には、ユーザーに通知することなくいつでも本規約を変更することができるものとします。
+              当サロンは、本規約を随時変更できるものとし、変更後の規約は本サイトに掲載した時点で効力を生じます。
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-white mb-4">第10条（準拠法・裁判管轄）</h2>
+            <h2 className="text-2xl font-semibold text-white mb-4">第10条（準拠法・管轄）</h2>
             <p className="leading-relaxed">
-              本規約の解釈にあたっては、日本法を準拠法とします。本サービスに関して紛争が生じた場合には、当社の本店所在地を管轄する裁判所を専属的合意管轄とします。
+              本規約は日本法を準拠法とし、本規約に関して生じた紛争については、当サロン所在地を管轄する裁判所を第一審の専属的合意管轄とします。
             </p>
           </section>
 
           <div className="pt-8 mt-8 border-t border-gray-700">
             <p className="text-gray-400">
-              制定日：2025年1月1日<br />
-              最終更新日：2025年1月1日
+              制定日：2025年9月15日<br />
+              最終更新日：2025年9月15日
             </p>
           </div>
         </div>

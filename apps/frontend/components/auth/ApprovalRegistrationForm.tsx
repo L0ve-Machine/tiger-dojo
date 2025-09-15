@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, CheckCircle, AlertCircle, Info } from 'lucide-react'
+import { Loader2, CheckCircle, AlertCircle, Info, ExternalLink } from 'lucide-react'
 
 export default function ApprovalRegistrationForm() {
   const router = useRouter()
@@ -21,6 +21,8 @@ export default function ApprovalRegistrationForm() {
   const [errors, setErrors] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [registrationSuccess, setRegistrationSuccess] = useState(false)
+  const [acceptTerms, setAcceptTerms] = useState(false)
+  const [acceptPrivacy, setAcceptPrivacy] = useState(false)
 
 
   const handleRegistration = async (e: React.FormEvent) => {
@@ -33,6 +35,11 @@ export default function ApprovalRegistrationForm() {
 
     if (formData.password.length < 8) {
       setErrors(['パスワードは8文字以上である必要があります'])
+      return
+    }
+
+    if (!acceptTerms || !acceptPrivacy) {
+      setErrors(['利用規約とプライバシーポリシーに同意してください'])
       return
     }
 
@@ -219,6 +226,48 @@ export default function ApprovalRegistrationForm() {
               />
             </div>
 
+            {/* 利用規約とプライバシーポリシーのチェックボックス */}
+            <div className="space-y-3 pt-4 border-t border-white/10">
+              <div className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  id="terms"
+                  checked={acceptTerms}
+                  onChange={(e) => setAcceptTerms(e.target.checked)}
+                  className="mt-1 rounded border-gray-600 bg-gray-800/50 text-yellow-400 focus:ring-yellow-400/20"
+                />
+                <Label htmlFor="terms" className="text-sm text-gray-300 cursor-pointer">
+                  <a 
+                    href="/terms" 
+                    target="_blank" 
+                    className="text-yellow-400 hover:text-yellow-300 underline"
+                  >
+                    利用規約
+                  </a>
+                  に同意する <span className="text-yellow-400">*</span>
+                </Label>
+              </div>
+              
+              <div className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  id="privacy"
+                  checked={acceptPrivacy}
+                  onChange={(e) => setAcceptPrivacy(e.target.checked)}
+                  className="mt-1 rounded border-gray-600 bg-gray-800/50 text-yellow-400 focus:ring-yellow-400/20"
+                />
+                <Label htmlFor="privacy" className="text-sm text-gray-300 cursor-pointer">
+                  <a 
+                    href="/privacy" 
+                    target="_blank" 
+                    className="text-yellow-400 hover:text-yellow-300 underline"
+                  >
+                    プライバシーポリシー
+                  </a>
+                  に同意する <span className="text-yellow-400">*</span>
+                </Label>
+              </div>
+            </div>
 
             {errors.length > 0 && (
               <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
@@ -238,13 +287,27 @@ export default function ApprovalRegistrationForm() {
             <Button 
               type="submit" 
               className="w-full py-3 px-4 bg-gradient-to-r from-yellow-400 to-yellow-600 text-black hover:from-yellow-500 hover:to-yellow-700 font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed" 
-              disabled={isSubmitting}
+              disabled={isSubmitting || !acceptTerms || !acceptPrivacy}
             >
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {isSubmitting ? '登録中...' : '登録申請を送信'}
             </Button>
 
-            <div className="text-center text-sm text-gray-400 pt-4 border-t border-white/10">
+            {/* Discord入会案内 */}
+            <p className="text-indigo-400 text-sm text-center mt-6">
+              入会希望の方は
+              <a
+                href="https://discord.gg/f3vr94Qhqr"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-indigo-300 hover:text-indigo-200 underline font-medium mx-1"
+              >
+                こちら
+              </a>
+              からご連絡ください。
+            </p>
+
+            <div className="text-center text-sm text-gray-400 pt-4 border-t border-white/10 mt-4">
               既にアカウントをお持ちの方は{' '}
               <a href="/auth/login" className="text-yellow-400 hover:text-yellow-300 transition font-medium">
                 ログイン

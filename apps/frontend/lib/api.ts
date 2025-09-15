@@ -179,7 +179,7 @@ export const dashboardApi = {
 
 // Create admin-specific axios instance with authentication
 const adminApiClient = axios.create({
-  baseURL: process.env.NODE_ENV === 'production' ? 'http://trade-dojo-fx.com' : '',
+  baseURL: process.env.NODE_ENV === 'production' ? 'https://trade-dojo-fx.com' : '',
   timeout: 10000,
   withCredentials: true, // Send auth cookies
 })
@@ -343,7 +343,7 @@ export const getAvatarUrl = (avatarPath: string | null | undefined): string | nu
   // If it starts with /uploads/, convert to absolute URL
   if (avatarPath.startsWith('/uploads/')) {
     // Always use the main domain (nginx) for both dev and prod
-    return `http://trade-dojo-fx.com${avatarPath}`
+    return `https://trade-dojo-fx.com${avatarPath}`
   }
   
   return avatarPath

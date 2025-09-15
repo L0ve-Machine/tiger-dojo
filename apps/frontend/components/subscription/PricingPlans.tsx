@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/auth-store'
-import { Check, Crown, Star, Zap, Loader2, Play, MessageCircle, ExternalLink } from 'lucide-react'
+import { Check, Crown, Star, Zap, Loader2, Play, MessageCircle, ExternalLink, ArrowLeft } from 'lucide-react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
@@ -146,6 +146,15 @@ export default function PricingPlans() {
   return (
     <div className="min-h-screen py-16 px-4" style={{ background: 'linear-gradient(135deg, #0a0b14 0%, #1a1b3a 50%, #0f1020 100%)' }}>
       <div className="max-w-7xl mx-auto">
+        <div className="mb-8">
+          <Button
+            onClick={() => router.push('/')}
+            className="flex items-center gap-2 bg-transparent border border-gray-600 text-gray-300 hover:bg-gray-800/50 hover:border-gray-500 transition-all"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            ホームに戻る
+          </Button>
+        </div>
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl mb-6 text-white">
             料金プラン
@@ -344,18 +353,18 @@ export default function PricingPlans() {
                         ) : currentSubscription?.plan.name === plan.name ? (
                           '現在のプラン'
                         ) : (
-                          '今すぐ申し込む'
+                          '今すぐ申し込む（PayPal）'
                         )}
                       </Button>
                       <Button
                         onClick={() => window.open('https://discord.gg/f3vr94Qhqr', '_blank')}
-                        className={`w-full py-2 bg-transparent border rounded-lg text-sm ${
+                        className={`w-full py-2 bg-transparent border rounded-lg text-xs ${
                           plan.premium 
                             ? 'border-gray-900 text-gray-900 hover:bg-gray-900/10'
                             : 'border-yellow-500 text-yellow-500 hover:bg-yellow-500/10'
                         }`}
                       >
-                        申込済会員はこちら（Discord）
+                        申込相談/申込済会員はこちら（Discord）
                       </Button>
                     </div>
                   )}

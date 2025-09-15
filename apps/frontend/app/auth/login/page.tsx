@@ -84,7 +84,7 @@ export default function LoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10 bg-white border-gray-700 text-black placeholder:text-gray-500"
-                    placeholder="student@fx-tiger-dojo.com"
+                    placeholder="your-email@example.com"
                     required
                   />
                 </div>
@@ -101,7 +101,7 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 pr-10 bg-white border-gray-700 text-black placeholder:text-gray-500"
-                    placeholder="password123!A"
+                    placeholder="••••••••"
                     required
                   />
                   <button
@@ -143,12 +143,6 @@ export default function LoginPage() {
               <Link href="/auth/register" className="text-yellow-500 hover:text-yellow-400 text-sm">
                 新規登録はこちら
               </Link>
-            </div>
-
-            <div className="mt-6 p-4 bg-gray-800/50 rounded-lg">
-              <p className="text-gray-400 text-xs mb-2">テストアカウント：</p>
-              <p className="text-gray-300 text-xs">メール: student@fx-tiger-dojo.com</p>
-              <p className="text-gray-300 text-xs">パスワード: password123!A</p>
             </div>
           </div>
         </Card>

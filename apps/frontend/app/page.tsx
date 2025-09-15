@@ -67,7 +67,7 @@ export default function Home() {
             
             <div className="space-y-6 text-xl text-gray-300 leading-relaxed mb-10">
               <p>
-                マンツーマン講習／講習講習／特別ラウンジ／個別チャット対応で、
+                マンツーマン講習／講習／特別ラウンジ／個別チャット対応で、
               </p>
               <p className="text-yellow-400 font-medium">
                 "勝てる型"を一緒に作るFXオンライン学習コミュニティです。
@@ -372,13 +372,13 @@ export default function Home() {
                       background: 'linear-gradient(135deg, #d4af37, #e6c547)'
                     }}
                   >
-                    今すぐ申し込む
+                    今すぐ申し込む（PayPal）
                   </Button>
                   <Button
                     onClick={() => window.open('https://discord.gg/f3vr94Qhqr', '_blank')}
-                    className="w-full py-2 bg-transparent border border-yellow-500 text-yellow-500 hover:bg-yellow-500/10 rounded-lg text-sm"
+                    className="w-full py-2 bg-transparent border border-yellow-500 text-yellow-500 hover:bg-yellow-500/10 rounded-lg text-xs"
                   >
-                    申込済会員はこちら（Discord）
+                    申込相談/申込済会員はこちら（Discord）
                   </Button>
                 </div>
               </CardContent>
@@ -493,13 +493,13 @@ export default function Home() {
                       background: '#1f2937'
                     }}
                   >
-                    今すぐ申し込む
+                    今すぐ申し込む（PayPal）
                   </Button>
                   <Button
                     onClick={() => window.open('https://discord.gg/f3vr94Qhqr', '_blank')}
-                    className="w-full py-2 bg-transparent border border-gray-900 text-gray-900 hover:bg-gray-900/10 rounded-lg text-sm"
+                    className="w-full py-2 bg-transparent border border-gray-900 text-gray-900 hover:bg-gray-900/10 rounded-lg text-xs"
                   >
-                    申込済会員はこちら（Discord）
+                    申込相談/申込済会員はこちら（Discord）
                   </Button>
                 </div>
               </CardContent>
