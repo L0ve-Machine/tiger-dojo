@@ -225,6 +225,7 @@ export const adminApi = {
     email?: string
     role?: string
     isActive?: boolean
+    createdAt?: string
   }) => adminApiClient.put(`/api/admin/users/${userId}`, data),
   
   deleteUser: (userId: string) => adminApiClient.delete(`/api/admin/users/${userId}`),
@@ -234,6 +235,12 @@ export const adminApi = {
   
   updateUserStatus: (userId: string, isActive: boolean) => 
     adminApiClient.put(`/api/admin/users/${userId}/status`, { isActive }),
+  
+  pauseUser: (userId: string) => 
+    adminApiClient.post(`/api/admin/users/${userId}/pause`),
+  
+  resumeUser: (userId: string) => 
+    adminApiClient.post(`/api/admin/users/${userId}/resume`),
 
   // Course Management
   getAdminCourses: () => adminApiClient.get('/api/admin/courses'),

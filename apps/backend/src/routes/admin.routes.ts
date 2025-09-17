@@ -5,6 +5,7 @@ import { AdminController } from '../controllers/admin.controller'
 import { z } from 'zod'
 import fs from 'fs'
 import path from 'path'
+import { generateTokens } from '../utils/jwt.utils'
 
 const router = express.Router()
 
@@ -125,6 +126,8 @@ router.put('/users/:id', AdminController.updateUser)
 router.delete('/users/:id', AdminController.deleteUser)
 router.put('/users/:id/role', AdminController.updateUserRole)
 router.put('/users/:id/status', AdminController.updateUserStatus)
+router.post('/users/:id/pause', AdminController.pauseUser)
+router.post('/users/:id/resume', AdminController.resumeUser)
 
 // Course Management
 router.get('/courses', authenticateToken, requireInstructorOrAdmin, AdminController.getCourses)
@@ -291,68 +294,101 @@ router.delete('/chat/rooms/:id', async (req: express.Request, res: express.Respo
     const { id } = req.params
     const { prisma } = require('../index')
 
-    // Check if room exists
-    const room = await prisma.course.findUnique({
+    // Check if room exists in Course table (course-based chat rooms)
+    const courseRoom = await prisma.course.findUnique({
       where: { id }
     })
 
-    if (!room) {
+    // Check if room exists in PrivateRoom table (password-protected rooms)
+    const privateRoom = await prisma.privateRoom.findUnique({
+      where: { id }
+    })
+
+    if (!courseRoom && !privateRoom) {
       return res.status(404).json({
         error: 'チャットルームが見つかりません'
       })
     }
 
-    // Delete all messages in the room first
-    await prisma.chatMessage.deleteMany({
-      where: { courseId: id }
-    })
-
-    // Delete all enrollments for this course
-    await prisma.enrollment.deleteMany({
-      where: { courseId: id }
-    })
-
-    // Delete all lessons for this course
-    const lessons = await prisma.lesson.findMany({
-      where: { courseId: id }
-    })
-
-    for (const lesson of lessons) {
-      // Delete progress records for each lesson
-      await prisma.progress.deleteMany({
-        where: { lessonId: lesson.id }
-      })
+    if (privateRoom) {
+      // Delete private room and its associated data
+      console.log('Deleting private room:', privateRoom.name)
       
-      // Delete user lesson access records
-      await prisma.userLessonAccess.deleteMany({
-        where: { lessonId: lesson.id }
-      })
-
-      // Delete resources for each lesson
-      await prisma.resource.deleteMany({
-        where: { lessonId: lesson.id }
-      })
-      
-      // Delete chat messages for each lesson
+      // Delete all messages in the private room
       await prisma.chatMessage.deleteMany({
-        where: { lessonId: lesson.id }
+        where: { privateRoomId: id }
+      })
+      
+      // Delete all room memberships
+      await prisma.privateRoomMember.deleteMany({
+        where: { roomId: id }
+      })
+      
+      // Delete the private room
+      await prisma.privateRoom.delete({
+        where: { id }
+      })
+      
+      res.json({
+        success: true,
+        message: `${privateRoom.name} プライベートルームが削除されました`
+      })
+    } else if (courseRoom) {
+      // Delete course-based room and its associated data
+      console.log('Deleting course room:', courseRoom.title)
+      
+      // Delete all messages in the room first
+      await prisma.chatMessage.deleteMany({
+        where: { courseId: id }
+      })
+
+      // Delete all enrollments for this course
+      await prisma.enrollment.deleteMany({
+        where: { courseId: id }
+      })
+
+      // Delete all lessons for this course
+      const lessons = await prisma.lesson.findMany({
+        where: { courseId: id }
+      })
+
+      for (const lesson of lessons) {
+        // Delete progress records for each lesson
+        await prisma.progress.deleteMany({
+          where: { lessonId: lesson.id }
+        })
+        
+        // Delete user lesson access records
+        await prisma.userLessonAccess.deleteMany({
+          where: { lessonId: lesson.id }
+        })
+
+        // Delete resources for each lesson
+        await prisma.resource.deleteMany({
+          where: { lessonId: lesson.id }
+        })
+        
+        // Delete chat messages for each lesson
+        await prisma.chatMessage.deleteMany({
+          where: { lessonId: lesson.id }
+        })
+      }
+
+      // Delete all lessons
+      await prisma.lesson.deleteMany({
+        where: { courseId: id }
+      })
+
+      // Finally delete the room/course
+      await prisma.course.delete({
+        where: { id }
+      })
+
+      res.json({
+        success: true,
+        message: `${courseRoom.title} チャットルームが削除されました`
       })
     }
-
-    // Delete all lessons
-    await prisma.lesson.deleteMany({
-      where: { courseId: id }
-    })
-
-    // Finally delete the room/course
-    await prisma.course.delete({
-      where: { id }
-    })
-
-    res.json({
-      success: true,
-      message: `${room.title} チャットルームが削除されました`
-    })
   } catch (error) {
     console.error('Delete chat room error:', error)
     res.status(500).json({

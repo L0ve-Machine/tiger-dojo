@@ -130,6 +130,9 @@ export class AdminController {
             isActive: true,
             lastLoginAt: true,
             createdAt: true,
+            isPaused: true,
+            pausedAt: true,
+            pausedDays: true,
             _count: {
               select: {
                 enrollments: true,
@@ -191,17 +194,28 @@ export class AdminController {
   static async updateUser(req: AuthenticatedRequest, res: Response) {
     try {
       const { id } = req.params
-      const { name, email, role, isActive } = req.body
+      const { name, email, role, isActive, createdAt } = req.body
+
+      const updateData: any = {}
+      if (name !== undefined) updateData.name = name
+      if (email !== undefined) updateData.email = email
+      if (role !== undefined) updateData.role = role
+      if (isActive !== undefined) updateData.isActive = isActive
+      if (createdAt !== undefined) updateData.createdAt = new Date(createdAt)
 
       const user = await prisma.user.update({
         where: { id },
-        data: { name, email, role, isActive },
+        data: updateData,
         select: {
           id: true,
           email: true,
           name: true,
           role: true,
-          isActive: true
+          isActive: true,
+          createdAt: true,
+          isPaused: true,
+          pausedAt: true,
+          pausedDays: true
         }
       })
 
@@ -209,6 +223,103 @@ export class AdminController {
     } catch (error) {
       console.error('Update user error:', error)
       res.status(500).json({ error: 'Failed to update user' })
+    }
+  }
+
+  static async pauseUser(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { id } = req.params
+
+      const user = await prisma.user.findUnique({
+        where: { id },
+        select: { isPaused: true, pausedAt: true, pausedDays: true }
+      })
+
+      if (!user) {
+        return res.status(404).json({ error: 'ユーザーが見つかりません' })
+      }
+
+      if (user.isPaused) {
+        return res.status(400).json({ error: 'ユーザーは既に休会中です' })
+      }
+
+      const updatedUser = await prisma.user.update({
+        where: { id },
+        data: {
+          isPaused: true,
+          pausedAt: new Date()
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          isPaused: true,
+          pausedAt: true,
+          pausedDays: true
+        }
+      })
+
+      // 休会時に既存のセッションを全て削除してログアウト
+      await prisma.session.deleteMany({
+        where: { userId: id }
+      })
+
+      res.json({ user: updatedUser, message: 'ユーザーを休会状態にしました。既存のセッションは無効化されました。' })
+    } catch (error) {
+      console.error('Pause user error:', error)
+      res.status(500).json({ error: 'Failed to pause user' })
+    }
+  }
+
+  static async resumeUser(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { id } = req.params
+
+      const user = await prisma.user.findUnique({
+        where: { id },
+        select: { isPaused: true, pausedAt: true, pausedDays: true }
+      })
+
+      if (!user) {
+        return res.status(404).json({ error: 'ユーザーが見つかりません' })
+      }
+
+      if (!user.isPaused) {
+        return res.status(400).json({ error: 'ユーザーは休会中ではありません' })
+      }
+
+      // 休会期間の日数を計算
+      let additionalPausedDays = 0
+      if (user.pausedAt) {
+        additionalPausedDays = Math.ceil(
+          (Date.now() - new Date(user.pausedAt).getTime()) / (1000 * 60 * 60 * 24)
+        )
+      }
+
+      const updatedUser = await prisma.user.update({
+        where: { id },
+        data: {
+          isPaused: false,
+          pausedAt: null,
+          pausedDays: user.pausedDays + Math.max(0, additionalPausedDays)
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          isPaused: true,
+          pausedAt: true,
+          pausedDays: true
+        }
+      })
+
+      res.json({ 
+        user: updatedUser, 
+        message: `ユーザーの休会を解除しました（休会期間: ${additionalPausedDays}日）`
+      })
+    } catch (error) {
+      console.error('Resume user error:', error)
+      res.status(500).json({ error: 'Failed to resume user' })
     }
   }
 

@@ -114,7 +114,8 @@ export class AuthService {
           name: true,
           role: true,
           isActive: true,
-          emailVerified: true
+          emailVerified: true,
+          isPaused: true
         }
       })
 
@@ -124,6 +125,10 @@ export class AuthService {
 
       if (!user.isActive) {
         throw new Error('アカウントが無効化されています')
+      }
+
+      if (user.isPaused) {
+        throw new Error('アカウントは現在休会中です。ログインできません。')
       }
 
       // Verify password
@@ -220,6 +225,10 @@ export class AuthService {
         throw new Error('Account is disabled')
       }
 
+      if (session.user.isPaused) {
+        throw new Error('Account is currently paused')
+      }
+
       // Generate new token pair
       const tokens = JWTUtils.generateTokenPair({
         userId: session.user.id,
@@ -304,7 +313,8 @@ export class AuthService {
           isActive: true,
           emailVerified: true,
           registeredAt: true,
-          lastLoginAt: true
+          lastLoginAt: true,
+          isPaused: true
         }
       })
 

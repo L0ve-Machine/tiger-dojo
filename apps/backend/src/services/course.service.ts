@@ -538,9 +538,24 @@ export class CourseService {
 
         case 'DRIP':
           if (lesson.releaseDays) {
-            const daysSinceEnrollment = Math.floor(
+            // ユーザー情報を取得（休会情報のため）
+            const user = await prisma.user.findUnique({
+              where: { id: userId },
+              select: { isPaused: true, pausedAt: true, pausedDays: true }
+            })
+            
+            const totalDays = Math.floor(
               (Date.now() - enrollment.enrolledAt.getTime()) / (1000 * 60 * 60 * 24)
             )
+            
+            // 休会期間を除外した実際の経過日数
+            let additionalPausedDays = 0
+            if (user?.isPaused && user.pausedAt) {
+              const pausedSince = Math.floor((Date.now() - new Date(user.pausedAt).getTime()) / (1000 * 60 * 60 * 24))
+              additionalPausedDays = Math.max(0, pausedSince)
+            }
+            
+            const daysSinceEnrollment = Math.max(0, totalDays - (user?.pausedDays || 0) - additionalPausedDays)
             
             if (daysSinceEnrollment < lesson.releaseDays) {
               return {

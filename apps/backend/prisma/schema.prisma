@@ -30,6 +30,11 @@ model User {
   emailVerified   Boolean   @default(false)
   verificationToken String?
   
+  // 休会機能
+  isPaused        Boolean   @default(false)   // 休会中フラグ
+  pausedAt        DateTime? // 休会開始日
+  pausedDays      Int       @default(0)       // 累計休会日数
+  
   sessions        Session[]
   enrollments     Enrollment[]
   progress        Progress[]

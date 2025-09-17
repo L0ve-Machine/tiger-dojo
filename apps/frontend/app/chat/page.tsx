@@ -20,6 +20,7 @@ interface Channel {
   type: 'text'
   description: string
   slug?: string
+  roomType?: string
 }
 
 interface ErrorState {
@@ -560,7 +561,7 @@ export default function ChatPage() {
         
         console.log('🔒 User is already a member, allowing access')
         // User is already a member, allow access
-        setAuthenticatedRooms(prev => new Set([...prev, channelId]))
+        setAuthenticatedRooms(prev => new Set(Array.from(prev).concat([channelId])))
       } catch (error) {
         console.error('🔒 Failed to check membership:', error)
         // On error, show password prompt to be safe
@@ -601,7 +602,7 @@ export default function ChatPage() {
     if (isConnected) {
       if (targetChannel) {
         console.log('Joining channel with actual ID:', actualRoomId, 'roomType:', roomType, 'from channel:', targetChannel)
-        joinChannel(actualRoomId, roomType)
+        joinChannel(actualRoomId, roomType as 'lesson' | 'course' | 'dm' | 'private')
       } else {
         joinChannel(channelId)
       }
@@ -1122,12 +1123,12 @@ export default function ChatPage() {
         <div className="px-3 py-3 border-t border-gray-700 bg-gray-800/50">
           <div className="flex items-center gap-3">
             <Avatar user={{
-              name: user?.user?.name || user?.name || 'U',
-              avatarColor: user?.user?.avatarColor || user?.avatarColor,
-              avatarImage: user?.user?.avatarImage || user?.avatarImage
+              name: user?.name || 'U',
+              avatarColor: user?.avatarColor,
+              avatarImage: user?.avatarImage
             }} size="md" />
             <div className="flex-1 min-w-0">
-              <div className="font-medium text-white truncate">{user?.user?.name || user?.name}</div>
+              <div className="font-medium text-white truncate">{user?.name}</div>
               <div className="text-xs text-gray-400">
                 {isConnected ? (
                   <span className="flex items-center gap-1">

@@ -42,7 +42,8 @@ export const authenticateToken = async (
         email: true,
         name: true,
         role: true,
-        isActive: true
+        isActive: true,
+        isPaused: true
       }
     })
 
@@ -55,6 +56,12 @@ export const authenticateToken = async (
     if (!user.isActive) {
       return res.status(403).json({ 
         error: 'Account is disabled' 
+      })
+    }
+
+    if (user.isPaused) {
+      return res.status(403).json({ 
+        error: 'アカウントは現在休会中です' 
       })
     }
 
@@ -140,6 +147,12 @@ export const validateRefreshToken = async (
       })
     }
 
+    if (session.user.isPaused) {
+      return res.status(403).json({ 
+        error: 'アカウントは現在休会中です' 
+      })
+    }
+
     // Add session and user to request
     req.user = {
       userId: session.user.id,
@@ -184,11 +197,12 @@ export const optionalAuth = async (
             email: true,
             name: true,
             role: true,
-            isActive: true
+            isActive: true,
+            isPaused: true
           }
         })
 
-        if (user && user.isActive) {
+        if (user && user.isActive && !user.isPaused) {
           req.user = payload
         }
       } catch (error) {

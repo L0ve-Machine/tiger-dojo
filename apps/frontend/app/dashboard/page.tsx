@@ -363,7 +363,7 @@ export default function DashboardPage() {
                 <p className="text-2xl font-bold text-white">
                   {dataLoading ? '...' : statistics?.statistics.totalLoginDays || 0}
                 </p>
-                <p className="text-gray-300 text-sm">総ログイン日数</p>
+                <p className="text-gray-300 text-sm">登録からの日数</p>
               </div>
             </div>
           </div>

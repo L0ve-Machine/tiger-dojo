@@ -125,8 +125,14 @@ export default function ChatManagementPage() {
   const fetchChatRooms = async () => {
     try {
       setRoomsLoading(true)
-      const response = await adminApi.getChatRooms()
-      setRooms(response.data.rooms || [])
+      const response = await fetch('/api/admin/chat/rooms')
+      
+      if (response.ok) {
+        const data = await response.json()
+        setRooms(data.rooms || [])
+      } else {
+        console.error('Failed to fetch chat rooms')
+      }
     } catch (err: any) {
       console.error('Chat rooms fetch error:', err)
     } finally {
@@ -233,6 +239,9 @@ export default function ChatManagementPage() {
 
   const createChatRoom = async () => {
     console.log('Creating room with data:', newRoom)
+    console.log('All localStorage keys:', Object.keys(localStorage))
+    console.log('sessionStorage adminAccess:', sessionStorage.getItem('adminAccess'))
+    
     if (!newRoom.title.trim() || !newRoom.slug.trim()) {
       alert('タイトルとスラッグを入力してください')
       return
@@ -246,12 +255,17 @@ export default function ChatManagementPage() {
     try {
       if (newRoom.isPrivate) {
         // Create private room
+        const accessToken = localStorage.getItem('accessToken')
+        console.log('Access token from localStorage:', accessToken ? 'EXISTS' : 'NOT FOUND')
+        console.log('Access token length:', accessToken?.length || 0)
+        
         const response = await fetch('/api/private-rooms', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+            'Authorization': `Bearer ${accessToken}`
           },
+          credentials: 'include',
           body: JSON.stringify({
             name: newRoom.title.trim(),
             slug: newRoom.slug.trim() || newRoom.title.trim().toLowerCase().replace(/[^a-z0-9]/g, '-'),
@@ -267,10 +281,21 @@ export default function ChatManagementPage() {
         }
       } else {
         // Create regular course room
-        await adminApi.createChatRoom({
-          title: newRoom.title.trim(),
-          slug: newRoom.slug.trim()
+        const response = await fetch('/api/admin/chat/rooms', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            title: newRoom.title.trim(),
+            slug: newRoom.slug.trim()
+          })
         })
+        
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || 'チャットルームの作成に失敗しました')
+        }
       }
       
       setNewRoom({ 
@@ -295,12 +320,20 @@ export default function ChatManagementPage() {
     }
 
     try {
-      await adminApi.deleteChatRoom(roomId)
+      const response = await fetch(`/api/admin/chat/rooms/${roomId}`, {
+        method: 'DELETE'
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'チャットルームの削除に失敗しました')
+      }
+      
       fetchChatRooms()
       alert('チャットルームが削除されました')
     } catch (err: any) {
       console.error('Delete chat room error:', err)
-      alert(err.response?.data?.error || 'チャットルームの削除に失敗しました')
+      alert(err.message || 'チャットルームの削除に失敗しました')
     }
   }
 
@@ -515,8 +548,17 @@ export default function ChatManagementPage() {
                 <Input
                   id="room-slug"
                   value={newRoom.slug}
-                  onChange={(e) => setNewRoom(prev => ({ ...prev, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') }))}
-                  placeholder="例: fx-beginners"
+                  onChange={(e) => setNewRoom(prev => ({ ...prev, slug: e.target.value }))}
+                  onBlur={(e) => {
+                    // フォーカスを外した時に適切なスラッグに変換
+                    const cleanSlug = e.target.value
+                      .toLowerCase()
+                      .replace(/[^a-z0-9\u3042-\u3096\u30a2-\u30f6\u4e00-\u9faf\s-]/g, '')
+                      .replace(/[\s\u3042-\u3096\u30a2-\u30f6\u4e00-\u9faf]+/g, '-')
+                      .replace(/^-+|-+$/g, '')
+                    setNewRoom(prev => ({ ...prev, slug: cleanSlug }))
+                  }}
+                  placeholder="例: fx-beginners または FX初心者"
                   className="bg-white border-gray-600 text-black"
                 />
               </div>

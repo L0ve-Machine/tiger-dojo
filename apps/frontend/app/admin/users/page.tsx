@@ -16,7 +16,12 @@ import {
   Ban,
   CheckCircle,
   AlertTriangle,
-  Trash2
+  Trash2,
+  Edit2,
+  Save,
+  X,
+  Pause,
+  Play
 } from 'lucide-react'
 
 interface User {
@@ -27,6 +32,9 @@ interface User {
   isActive: boolean
   lastLoginAt: string | null
   createdAt: string
+  isPaused?: boolean
+  pausedAt?: string | null
+  pausedDays?: number
   _count: {
     enrollments: number
     progress: number
@@ -58,6 +66,8 @@ export default function UsersPage() {
     limit: 20,
     pages: 0
   })
+  const [editingUserId, setEditingUserId] = useState<string | null>(null)
+  const [editingDate, setEditingDate] = useState('')
 
   // Debounce search term
   useEffect(() => {
@@ -88,6 +98,7 @@ export default function UsersPage() {
       }
 
       const response = await adminApi.getUsers(params)
+      console.log('Fetched users:', response.data.users.slice(0, 2)) // Debug first 2 users
       setUsers(response.data.users)
       setPagination(response.data.pagination)
     } catch (err: any) {
@@ -124,6 +135,41 @@ export default function UsersPage() {
     }
   }
 
+  const updateUserRegistrationDate = async (userId: string, newDate: string) => {
+    try {
+      await adminApi.updateUser(userId, { createdAt: newDate })
+      // Update local state
+      setUsers(users.map(user => 
+        user.id === userId ? { ...user, createdAt: newDate } : user
+      ))
+      setEditingUserId(null)
+      setEditingDate('')
+      alert('登録日が更新されました')
+    } catch (err: any) {
+      console.error('Update registration date error:', err)
+      alert('登録日の更新に失敗しました')
+    }
+  }
+
+  const startEditingDate = (userId: string, currentDate: string) => {
+    setEditingUserId(userId)
+    // Convert ISO string to date input format (YYYY-MM-DD)
+    const date = new Date(currentDate)
+    const formattedDate = date.toISOString().split('T')[0]
+    setEditingDate(formattedDate)
+  }
+
+  const cancelEditingDate = () => {
+    setEditingUserId(null)
+    setEditingDate('')
+  }
+
+  const saveRegistrationDate = (userId: string) => {
+    if (!editingDate) return
+    const isoDate = new Date(editingDate).toISOString()
+    updateUserRegistrationDate(userId, isoDate)
+  }
+
   const deleteUser = async (userId: string, userName: string, userEmail: string) => {
     if (!confirm(`⚠️ ユーザーを完全に削除しますか？\n\n名前: ${userName}\nメール: ${userEmail}\n\nこの操作は元に戻せません。ユーザーのすべてのデータ（進捗、メッセージ等）が削除されます。`)) {
       return
@@ -142,6 +188,42 @@ export default function UsersPage() {
     } catch (err: any) {
       console.error('Delete user error:', err)
       alert(err.response?.data?.error || 'ユーザーの削除に失敗しました')
+    }
+  }
+
+  const pauseUser = async (userId: string, userName: string) => {
+    if (!confirm(`ユーザー「${userName}」を休会状態にしますか？\n\n休会中は登録からの日数がカウントされず、動画の解放スケジュールも停止されます。`)) {
+      return
+    }
+
+    try {
+      const response = await adminApi.pauseUser(userId)
+      // Update local state
+      setUsers(users.map(user => 
+        user.id === userId ? { ...user, ...response.data.user } : user
+      ))
+      alert(response.data.message || 'ユーザーを休会状態にしました')
+    } catch (err: any) {
+      console.error('Pause user error:', err)
+      alert(err.response?.data?.error || 'ユーザーの休会処理に失敗しました')
+    }
+  }
+
+  const resumeUser = async (userId: string, userName: string) => {
+    if (!confirm(`ユーザー「${userName}」の休会を解除しますか？\n\n解除後は登録からの日数カウントが再開されます。`)) {
+      return
+    }
+
+    try {
+      const response = await adminApi.resumeUser(userId)
+      // Update local state
+      setUsers(users.map(user => 
+        user.id === userId ? { ...user, ...response.data.user } : user
+      ))
+      alert(response.data.message || 'ユーザーの休会を解除しました')
+    } catch (err: any) {
+      console.error('Resume user error:', err)
+      alert(err.response?.data?.error || 'ユーザーの休会解除に失敗しました')
     }
   }
 
@@ -278,6 +360,9 @@ export default function UsersPage() {
                     ステータス
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    休会状態
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                     最終ログイン
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
@@ -343,6 +428,44 @@ export default function UsersPage() {
                         )}
                       </button>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        {user.isPaused ? (
+                          <>
+                            <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-orange-500/20 text-orange-400">
+                              <Pause className="w-3 h-3" />
+                              休会中
+                            </div>
+                            <button
+                              onClick={() => resumeUser(user.id, user.name)}
+                              className="p-1 text-green-400 hover:text-green-300 hover:bg-green-500/10 rounded transition-colors"
+                              title="休会を解除"
+                            >
+                              <Play className="w-3 h-3" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400">
+                              <Play className="w-3 h-3" />
+                              アクティブ
+                            </div>
+                            <button
+                              onClick={() => pauseUser(user.id, user.name)}
+                              className="p-1 text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 rounded transition-colors"
+                              title="休会状態にする"
+                            >
+                              <Pause className="w-3 h-3" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                      {user.pausedDays && user.pausedDays > 0 && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          累計休会: {user.pausedDays}日
+                        </div>
+                      )}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
                       <div className="flex items-center gap-1">
                         <Activity className="w-3 h-3" />
@@ -358,10 +481,44 @@ export default function UsersPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
                       <div className="flex items-center gap-2 justify-end">
-                        <div className="text-xs text-gray-500 flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {formatDate(user.createdAt)}
-                        </div>
+                        {editingUserId === user.id ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="date"
+                              value={editingDate}
+                              onChange={(e) => setEditingDate(e.target.value)}
+                              className="bg-gray-800 text-white text-xs rounded px-2 py-1 border border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <button
+                              onClick={() => saveRegistrationDate(user.id)}
+                              className="p-1 text-green-400 hover:text-green-300 hover:bg-green-500/10 rounded transition-colors"
+                              title="保存"
+                            >
+                              <Save className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={cancelEditingDate}
+                              className="p-1 text-gray-400 hover:text-gray-300 hover:bg-gray-500/10 rounded transition-colors"
+                              title="キャンセル"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <div className="text-xs text-gray-500 flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              {formatDate(user.createdAt)}
+                            </div>
+                            <button
+                              onClick={() => startEditingDate(user.id, user.createdAt)}
+                              className="p-1 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors"
+                              title="登録日を編集"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
                         <button
                           onClick={() => deleteUser(user.id, user.name, user.email)}
                           className="p-1 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"

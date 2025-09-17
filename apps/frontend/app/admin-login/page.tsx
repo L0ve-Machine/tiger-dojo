@@ -36,13 +36,18 @@ export default function AdminLogin() {
 
       if (response.ok) {
         const data = await response.json()
+        console.log('Admin auth response:', data)
         
         // 管理者アクセス権限をセッションに保存
         sessionStorage.setItem('adminAccess', 'true')
         
         // JWTトークンとユーザー情報をlocalStorageに保存（API認証用）
         if (data.tokens?.accessToken) {
+          console.log('Saving access token to localStorage:', data.tokens.accessToken.substring(0, 20) + '...')
           localStorage.setItem('accessToken', data.tokens.accessToken)
+          console.log('Verification - token saved:', localStorage.getItem('accessToken') ? 'YES' : 'NO')
+        } else {
+          console.error('No access token in response:', data)
         }
         
         // ユーザー情報も保存（auth storeで使用）

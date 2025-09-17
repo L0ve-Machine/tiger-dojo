@@ -36,26 +36,29 @@ export class DashboardService {
       )
       const totalWatchedHours = Math.round(totalWatchedSeconds / 60 * 10) / 10 // 分単位に変更、小数点1位まで
 
-      // ログイン日数を計算（ユニークな日付をカウント）
-      const loginDates = new Set<string>()
+      // 登録からの日数を計算（休会期間を除く）
+      const registrationDate = new Date(user.createdAt)
+      const today = new Date()
+      const totalDays = Math.ceil((today.getTime() - registrationDate.getTime()) / (1000 * 60 * 60 * 24))
       
-      // 現在のログイン
-      if (user.lastLoginAt) {
-        loginDates.add(user.lastLoginAt.toISOString().split('T')[0])
+      // 休会中の場合、休会開始からの日数を追加で除外
+      let additionalPausedDays = 0
+      if (user.isPaused && user.pausedAt) {
+        const pausedSince = Math.ceil((today.getTime() - new Date(user.pausedAt).getTime()) / (1000 * 60 * 60 * 24))
+        additionalPausedDays = Math.max(0, pausedSince)
       }
       
-      // セッション履歴から日付を取得
-      user.sessions.forEach(session => {
-        const date = session.createdAt.toISOString().split('T')[0]
-        loginDates.add(date)
+      const daysSinceRegistration = Math.max(0, totalDays - user.pausedDays - additionalPausedDays)
+      
+      console.log('Registration calculation:', {
+        registrationDate: registrationDate.toISOString(),
+        today: today.toISOString(),
+        totalDays,
+        pausedDays: user.pausedDays,
+        additionalPausedDays,
+        isPaused: user.isPaused,
+        daysSinceRegistration
       })
-
-      // 初回登録日も含める
-      if (user.createdAt) {
-        loginDates.add(user.createdAt.toISOString().split('T')[0])
-      }
-
-      const totalLoginDays = loginDates.size
 
       // 最近の進捗を取得
       const recentProgress = await prisma.progress.findMany({
@@ -133,7 +136,7 @@ export class DashboardService {
         statistics: {
           completedLessons,
           totalWatchedHours,
-          totalLoginDays,
+          totalLoginDays: daysSinceRegistration,
           weeklyWatchedHours
         },
         courseProgress: courseStats,
