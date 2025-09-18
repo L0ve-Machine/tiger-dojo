@@ -51,7 +51,10 @@
       "Bash(apt:*)",
       "Bash(apt install:*)",
       "Bash(certbot:*)",
-      "Bash(nginx:*)"
+      "Bash(nginx:*)",
+      "Bash(export NODE_ENV=production)",
+      "Bash(echo:*)",
+      "Bash(export NODE_ENV=development)"
     ],
     "deny": [],
     "ask": []

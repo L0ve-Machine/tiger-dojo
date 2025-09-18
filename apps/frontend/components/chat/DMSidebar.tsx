@@ -16,7 +16,7 @@ interface DMUser {
 interface DMConversation {
   dmRoomId: string
   otherUser: DMUser
-  unreadCount?: number
+  unreadCount: number
   lastMessage?: {
     id: string
     userId: string
@@ -240,11 +240,17 @@ export default function DMSidebar({ currentUserId, onSelectDM, selectedDmRoomId,
                       <p className="text-sm text-gray-500 italic">メッセージがありません</p>
                     )}
                   </div>
-                  {dmUnreadCounts[conversation.dmRoomId] > 0 && (
-                    <div className="bg-red-500 text-white text-xs rounded-full px-2 py-1 min-w-[20px] h-5 flex items-center justify-center font-semibold ml-2">
-                      {dmUnreadCounts[conversation.dmRoomId]}
-                    </div>
-                  )}
+                  {(() => {
+                    const parentCount = dmUnreadCounts[conversation.dmRoomId] || 0
+                    const conversationCount = conversation.unreadCount || 0
+                    const finalCount = parentCount !== undefined ? parentCount : conversationCount
+                    console.log(`DM ${conversation.dmRoomId}: parentCount=${parentCount}, conversationCount=${conversationCount}, finalCount=${finalCount}`)
+                    return finalCount > 0 && (
+                      <div className="bg-red-500 text-white text-xs rounded-full px-2 py-1 min-w-[20px] h-5 flex items-center justify-center font-semibold ml-2">
+                        {finalCount}
+                      </div>
+                    )
+                  })()}
                 </div>
               </button>
             ))}

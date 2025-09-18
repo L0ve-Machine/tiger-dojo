@@ -7,6 +7,7 @@ import { ArrowLeft, MessageCircle, Home, BookOpen } from 'lucide-react'
 import Link from 'next/link'
 import DMSidebar from '@/components/chat/DMSidebar'
 import DMChat from '@/components/chat/DMChat'
+import { io, Socket } from 'socket.io-client'
 
 interface DMUser {
   id: string
@@ -24,6 +25,8 @@ export default function DMPage() {
   const [showMobileSidebar, setShowMobileSidebar] = useState(true)
   const [dmUnreadCounts, setDmUnreadCounts] = useState<Record<string, number>>({})
   const [dmLastReadTimestamps, setDmLastReadTimestamps] = useState<Record<string, number>>({})
+  const [recentlyReadDMs, setRecentlyReadDMs] = useState<Set<string>>(new Set())
+  const [socket, setSocket] = useState<Socket | null>(null)
 
   // Check authentication
   useEffect(() => {
@@ -32,7 +35,53 @@ export default function DMPage() {
     }
   }, [isAuthenticated, router])
 
-  const handleSelectDM = (dmRoomId: string, otherUser: DMUser) => {
+  // Fetch DM unread counts
+  const fetchDmUnreadCounts = async () => {
+    if (!user) return
+    
+    try {
+      const response = await fetch('/api/chat/unread-count', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        const serverUnreadCounts = data.dmUnreadCounts || {}
+        
+        // Don't overwrite counts for recently read DMs
+        const filteredCounts = { ...serverUnreadCounts }
+        recentlyReadDMs.forEach(dmRoomId => {
+          if (filteredCounts[dmRoomId] !== undefined) {
+            filteredCounts[dmRoomId] = 0
+          }
+        })
+        
+        setDmUnreadCounts(filteredCounts)
+      }
+    } catch (error) {
+      console.error('Failed to fetch DM unread counts:', error)
+    }
+  }
+
+  // Load DM unread counts with periodic refresh
+  useEffect(() => {
+    if (user && isAuthenticated) {
+      fetchDmUnreadCounts()
+
+      // Poll for unread count updates every 30 seconds
+      const interval = setInterval(() => {
+        fetchDmUnreadCounts()
+      }, 30000)
+      
+      return () => {
+        clearInterval(interval)
+      }
+    }
+  }, [user, isAuthenticated])
+
+  const handleSelectDM = async (dmRoomId: string, otherUser: DMUser) => {
     setSelectedDmRoomId(dmRoomId)
     setSelectedOtherUser(otherUser)
     setShowMobileSidebar(false) // Hide sidebar on mobile when chat is selected
@@ -43,11 +92,56 @@ export default function DMPage() {
       [dmRoomId]: Date.now()
     }))
     
-    // Clear unread count for this DM
-    setDmUnreadCounts(prev => ({
-      ...prev,
-      [dmRoomId]: 0
-    }))
+    // Clear unread count for this DM immediately
+    console.log('Clearing unread count for dmRoomId:', dmRoomId)
+    setDmUnreadCounts(prev => {
+      const newCounts = {
+        ...prev,
+        [dmRoomId]: 0
+      }
+      console.log('New DM unread counts:', newCounts)
+      return newCounts
+    })
+
+    // Add to recently read DMs list to prevent server overwrite
+    setRecentlyReadDMs(prev => new Set([...prev, dmRoomId]))
+
+    // Mark DM messages as read
+    try {
+      const response = await fetch('/api/chat/mark-channel-read', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify({
+          dmRoomId: dmRoomId
+        })
+      })
+      
+      if (response.ok) {
+        // Trigger unread count update immediately
+        window.dispatchEvent(new CustomEvent('dm-unread-update'))
+        
+        // Wait a bit, then remove from recently read list and refresh counts
+        setTimeout(() => {
+          setRecentlyReadDMs(prev => {
+            const newSet = new Set(prev)
+            newSet.delete(dmRoomId)
+            return newSet
+          })
+          fetchDmUnreadCounts()
+        }, 3000) // Wait 3 seconds for server to process
+      }
+    } catch (error) {
+      console.error('Failed to mark DM messages as read:', error)
+      // Remove from recently read list on error
+      setRecentlyReadDMs(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(dmRoomId)
+        return newSet
+      })
+    }
   }
 
   const handleBackToSidebar = () => {
@@ -114,6 +208,7 @@ export default function DMPage() {
             onSelectDM={handleSelectDM}
             selectedDmRoomId={selectedDmRoomId}
             dmUnreadCounts={dmUnreadCounts}
+            key={JSON.stringify(dmUnreadCounts)} // Force re-render when counts change
           />
         </div>
 

@@ -1003,6 +1003,35 @@ export default function ChatPage() {
     }
   }, [showPasswordModal])
   
+  // Mark messages as read when channel changes
+  useEffect(() => {
+    if (!selectedChannel || !user) return
+
+    const markChannelAsRead = async () => {
+      try {
+        await fetch('/api/chat/mark-channel-read', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          },
+          body: JSON.stringify({
+            channelId: selectedChannel
+          })
+        })
+        
+        // Trigger unread count update
+        window.dispatchEvent(new CustomEvent('chat-unread-update'))
+      } catch (error) {
+        console.error('Failed to mark messages as read:', error)
+      }
+    }
+
+    // Small delay to ensure messages are loaded before marking as read
+    const timer = setTimeout(markChannelAsRead, 500)
+    return () => clearTimeout(timer)
+  }, [selectedChannel, user])
+
   // Error dismissal timer
   useEffect(() => {
     if (error && error.type !== 'error') {

@@ -213,6 +213,36 @@ export default function DMChat({ dmRoomId, otherUser, currentUserId, onBack }: D
     setLastReadTimestamp(Date.now())
   }, [dmRoomId])
 
+  // Mark DM messages as read when opening this chat
+  useEffect(() => {
+    if (!dmRoomId || !currentUserId) return
+
+    const markDMAsRead = async () => {
+      try {
+        await fetch('/api/chat/mark-channel-read', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          },
+          body: JSON.stringify({
+            dmRoomId: dmRoomId
+          })
+        })
+        console.log('Marked DM as read:', dmRoomId)
+        
+        // Trigger unread count update
+        window.dispatchEvent(new CustomEvent('dm-unread-update'))
+      } catch (error) {
+        console.error('Failed to mark DM messages as read:', error)
+      }
+    }
+
+    // Small delay to ensure messages are loaded before marking as read
+    const timer = setTimeout(markDMAsRead, 500)
+    return () => clearTimeout(timer)
+  }, [dmRoomId, currentUserId])
+
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString)

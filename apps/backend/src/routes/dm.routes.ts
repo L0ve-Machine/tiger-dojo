@@ -173,13 +173,33 @@ router.get('/recent', authMiddleware, async (req: Request, res: Response) => {
               userName: message.user.name,
               content: message.content,
               createdAt: message.createdAt
-            }
+            },
+            unreadCount: 0 // Will be calculated below
           })
         }
       }
     }
 
     const conversations = Array.from(conversationsMap.values())
+    
+    // Calculate unread counts for each conversation
+    for (const conversation of conversations) {
+      const unreadCount = await prisma.chatMessage.count({
+        where: {
+          dmRoomId: conversation.dmRoomId,
+          NOT: { userId: userId }, // Not from current user
+          NOT: {
+            readBy: {
+              some: {
+                userId: userId
+              }
+            }
+          }
+        }
+      })
+      conversation.unreadCount = unreadCount
+    }
+    
     res.json(conversations)
   } catch (error) {
     console.error('Get recent DMs error:', error)
@@ -249,7 +269,8 @@ router.post('/message', authMiddleware, async (req: Request, res: Response) => {
       content: message.content,
       type: message.type,
       createdAt: message.createdAt,
-      isEdited: message.isEdited
+      isEdited: message.isEdited,
+      dmRoomId: dmRoomId
     }
 
     // Try to broadcast to Socket.io room if available

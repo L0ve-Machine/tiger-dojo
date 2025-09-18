@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/auth-store'
 import { courseApi } from '@/lib/api'
+import { ChatLinkWithBadge } from '@/components/chat/UnreadBadge'
 import { Play, Lock, Clock, Calendar, ChevronRight, Menu, X } from 'lucide-react'
 import Image from 'next/image'
 
@@ -176,9 +177,9 @@ export default function VideosPage() {
               <Link href="/videos" className="text-yellow-400 font-medium">
                 講習
               </Link>
-              <Link href="/chat" className="text-gray-400 hover:text-white transition">
+              <ChatLinkWithBadge href="/chat" className="text-gray-400 hover:text-white transition">
                 チャット
-              </Link>
+              </ChatLinkWithBadge>
               <Link href="/dashboard" className="text-gray-400 hover:text-white transition">
                 ダッシュボード
               </Link>
@@ -204,13 +205,13 @@ export default function VideosPage() {
                 >
                   講習
                 </Link>
-                <Link 
+                <ChatLinkWithBadge 
                   href="/chat" 
                   className="block text-gray-400 hover:text-white transition"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   チャット
-                </Link>
+                </ChatLinkWithBadge>
                 <Link 
                   href="/dashboard" 
                   className="block text-gray-400 hover:text-white transition"

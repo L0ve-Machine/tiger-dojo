@@ -145,6 +145,14 @@ export class SocketServer {
         await this.handleGetOnlineUsers(socket)
       })
 
+      // Handle joining user-specific room for unread count updates
+      socket.on('join_user_room', (userId: string) => {
+        if (userId === socket.data.userId) {
+          socket.join(`user:${userId}`)
+          console.log(`User ${socket.data.userName} joined user room: user:${userId}`)
+        }
+      })
+
       // Handle disconnection
       socket.on('disconnect', () => {
         console.log(`👋 User ${socket.data.userName} disconnected (${socket.id})`)

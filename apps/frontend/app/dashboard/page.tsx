@@ -7,6 +7,7 @@ import { LogOut, Settings, Play, Lock, Clock, Calendar, Menu, X, Trophy, Trendin
 import Link from 'next/link'
 import Image from 'next/image'
 import { dashboardApi, courseApi, authApi } from '@/lib/api'
+import { ChatLinkWithBadge } from '@/components/chat/UnreadBadge'
 
 interface DashboardStatistics {
   user: {
@@ -215,9 +216,9 @@ export default function DashboardPage() {
               <Link href="/videos" className="text-gray-400 hover:text-white font-medium transition">
                 講習
               </Link>
-              <Link href="/chat" className="text-gray-400 hover:text-white font-medium transition">
+              <ChatLinkWithBadge href="/chat" className="text-gray-400 hover:text-white font-medium transition">
                 チャット
-              </Link>
+              </ChatLinkWithBadge>
               
               <div className="flex items-center gap-3 pl-6 border-l border-gray-600">
                 <div className="flex items-center gap-2">
@@ -265,13 +266,13 @@ export default function DashboardPage() {
                 >
                   講習
                 </Link>
-                <Link 
+                <ChatLinkWithBadge 
                   href="/chat" 
                   className="block text-gray-400 hover:text-white font-medium transition"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   チャット
-                </Link>
+                </ChatLinkWithBadge>
                 
                 <div className="pt-4 border-t border-gray-700">
                   <div className="flex items-center gap-2 mb-4">
