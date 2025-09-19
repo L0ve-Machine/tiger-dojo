@@ -4,6 +4,30 @@ import { prisma } from '../index'
 
 const router = Router()
 
+// Get total unread DM count
+router.get('/unread-count', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.userId
+    
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication required' })
+    }
+    
+    // Count all unread DM messages sent to the current user
+    const unreadCount = await prisma.chatMessage.count({
+      where: {
+        dmRoomId: { contains: userId },
+        NOT: { userId: userId } // Not from current user
+      }
+    })
+    
+    res.json({ unreadCount })
+  } catch (error) {
+    console.error('Get DM unread count error:', error)
+    res.status(500).json({ error: 'Failed to get unread count' })
+  }
+})
+
 // Get all users for DM (excluding self)
 router.get('/users', authMiddleware, async (req: Request, res: Response) => {
   try {
@@ -117,88 +141,97 @@ router.get('/recent', authMiddleware, async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Authentication required' })
     }
     
-    // Get recent DM messages where user participated
-    const recentMessages = await prisma.chatMessage.findMany({
+    // Get ALL users who have sent DMs to current user or received DMs from current user
+    const allDMMessages = await prisma.chatMessage.findMany({
       where: {
-        dmRoomId: {
-          contains: userId
-        }
+        OR: [
+          { dmRoomId: { contains: userId } },
+          // Also include messages where current user is participant
+        ]
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            role: true,
-            avatarColor: true,
-            avatarImage: true
-          }
-        }
+      select: {
+        dmRoomId: true,
+        userId: true,
+        createdAt: true
       },
-      orderBy: { createdAt: 'desc' },
-      take: 50
+      orderBy: { createdAt: 'desc' }
     })
 
-    // Group by DM room and get latest message for each
-    const conversationsMap = new Map()
+    // Get unique DM room IDs and the other user in each conversation
+    const dmRoomIds = new Set<string>()
+    const conversationUsers = new Map<string, string>() // dmRoomId -> otherUserId
     
-    for (const message of recentMessages) {
-      const dmRoomId = message.dmRoomId
-      
-      if (!dmRoomId) continue // Skip messages without dmRoomId
-      
-      if (!conversationsMap.has(dmRoomId)) {
-        // Get the other user ID
-        const userIds = dmRoomId.split('_')
+    for (const msg of allDMMessages) {
+      if (msg.dmRoomId && msg.dmRoomId.includes(userId)) {
+        dmRoomIds.add(msg.dmRoomId)
+        const userIds = msg.dmRoomId.split('_')
         const otherUserId = userIds.find(id => id !== userId)
-        
         if (otherUserId) {
-          const otherUser = await prisma.user.findUnique({
-            where: { id: otherUserId },
-            select: {
-              id: true,
-              name: true,
-              role: true,
-              avatarColor: true,
-              avatarImage: true
-            }
-          })
-
-          conversationsMap.set(dmRoomId, {
-            dmRoomId,
-            otherUser,
-            lastMessage: {
-              id: message.id,
-              userId: message.user.id,
-              userName: message.user.name,
-              content: message.content,
-              createdAt: message.createdAt
-            },
-            unreadCount: 0 // Will be calculated below
-          })
+          conversationUsers.set(msg.dmRoomId, otherUserId)
         }
       }
     }
 
-    const conversations = Array.from(conversationsMap.values())
+    // Build conversations list
+    const conversations = []
     
-    // Calculate unread counts for each conversation
-    for (const conversation of conversations) {
-      const unreadCount = await prisma.chatMessage.count({
-        where: {
-          dmRoomId: conversation.dmRoomId,
-          NOT: { userId: userId }, // Not from current user
-          NOT: {
-            readBy: {
-              some: {
-                userId: userId
-              }
-            }
-          }
+    for (const [dmRoomId, otherUserId] of conversationUsers) {
+      // Get other user info
+      const otherUser = await prisma.user.findUnique({
+        where: { id: otherUserId },
+        select: {
+          id: true,
+          name: true,
+          role: true,
+          avatarColor: true,
+          avatarImage: true
         }
       })
-      conversation.unreadCount = unreadCount
+      
+      if (!otherUser) continue
+
+      // Get last message in conversation
+      const lastMessage = await prisma.chatMessage.findFirst({
+        where: { dmRoomId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      })
+
+      // Calculate unread count (messages not from current user)
+      const unreadCount = await prisma.chatMessage.count({
+        where: {
+          dmRoomId: dmRoomId,
+          NOT: { userId: userId } // Not from current user
+        }
+      })
+      
+      conversations.push({
+        dmRoomId,
+        otherUser,
+        lastMessage: lastMessage ? {
+          id: lastMessage.id,
+          userId: lastMessage.user.id,
+          userName: lastMessage.user.name,
+          content: lastMessage.content,
+          createdAt: lastMessage.createdAt
+        } : null,
+        unreadCount
+      })
     }
+    
+    // Sort conversations by last message time
+    conversations.sort((a, b) => {
+      const aTime = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0
+      const bTime = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0
+      return bTime - aTime
+    })
     
     res.json(conversations)
   } catch (error) {

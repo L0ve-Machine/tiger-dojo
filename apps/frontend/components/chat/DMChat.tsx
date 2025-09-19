@@ -59,13 +59,6 @@ export default function DMChat({ dmRoomId, otherUser, currentUserId, onBack }: D
         roomId: dmRoomId
       })
 
-      // Listen for new messages
-      const handleNewMessage = (message: DMMessage) => {
-        console.log('Received DM message:', message)
-        setMessages(prev => [...prev, message])
-        scrollToBottom()
-      }
-
       // Listen for message history
       const handleMessageHistory = (data: { channelId: string, messages: DMMessage[] }) => {
         if (data.channelId === dmRoomId) {
@@ -75,11 +68,9 @@ export default function DMChat({ dmRoomId, otherUser, currentUserId, onBack }: D
         }
       }
 
-      socket.on('new_message', handleNewMessage)
       socket.on('message_history', handleMessageHistory)
 
       return () => {
-        socket.off('new_message', handleNewMessage)
         socket.off('message_history', handleMessageHistory)
         
         // Leave the DM room

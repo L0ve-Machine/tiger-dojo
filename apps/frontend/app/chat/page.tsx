@@ -12,6 +12,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import DMSidebar from '@/components/chat/DMSidebar'
 import DMChat from '@/components/chat/DMChat'
+import { fireChatOpenedEvent } from '@/lib/chat-notifications'
 
 // Types for better TypeScript support
 interface Channel {
@@ -68,10 +69,12 @@ export default function ChatPage() {
   const [selectedDmUser, setSelectedDmUser] = useState<string | null>(null)
   const [selectedDmRoomId, setSelectedDmRoomId] = useState<string>('')
   const [showDMSidebar, setShowDMSidebar] = useState(false)
-  const [channelUnreadCounts, setChannelUnreadCounts] = useState<Record<string, number>>({})
   const [lastReadTimestamps, setLastReadTimestamps] = useState<Record<string, number>>({})
   const [dmUnreadCounts, setDmUnreadCounts] = useState<Record<string, number>>({})
   const [dmLastReadTimestamps, setDmLastReadTimestamps] = useState<Record<string, number>>({})
+  const [dmTotalUnreadCount, setDmTotalUnreadCount] = useState(0) // DM全体の未読数
+  const [channelTotalUnreadCount, setChannelTotalUnreadCount] = useState(0) // 一般チャンネルの総未読数
+  const [channelUnreadCounts, setChannelUnreadCounts] = useState<Record<string, number>>({}) // チャンネル別の未読数
   const [error, setError] = useState<ErrorState | null>(null)
   const [loadingStates, setLoadingStates] = useState<LoadingStates>({
     sendingMessage: false,
@@ -87,6 +90,7 @@ export default function ChatPage() {
   const [reconnectAttempts, setReconnectAttempts] = useState(0)
   const [lastPongTime, setLastPongTime] = useState(Date.now())
   const [playNotificationSound, setPlayNotificationSound] = useState(false)
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
   const [newUserName, setNewUserName] = useState('')
   const [selectedAvatarColor, setSelectedAvatarColor] = useState('')
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
@@ -231,6 +235,43 @@ export default function ChatPage() {
     }
   }
 
+  // Load all unread counts (DM + channels)
+  const loadAllUnreadCounts = async () => {
+    try {
+      console.log('🔥 [loadAllUnreadCounts] Fetching all unread counts from /api/chat/unread-count...')
+      
+      const token = localStorage.getItem('accessToken')
+      const response = await fetch('/api/chat/unread-count', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        const totalDmUnread = Object.values(data.dmUnreadCounts || {}).reduce((sum: number, count: number) => sum + count, 0)
+        const channelUnreadByChannel = data.channelUnreadCounts || {}
+        const channelUnread = Object.values(channelUnreadByChannel).reduce((sum: number, count: number) => sum + count, 0)
+        
+        console.log('🔥 [loadAllUnreadCounts] Server response:', data)
+        console.log('🔥 [loadAllUnreadCounts] Total channel unread count:', channelUnread)
+        console.log('🔥 [loadAllUnreadCounts] Channel unread breakdown:', channelUnreadByChannel)
+        console.log('🔥 [loadAllUnreadCounts] Total DM unread count:', totalDmUnread)
+        console.log('🔥 [loadAllUnreadCounts] DM breakdown:', data.dmUnreadCounts)
+        console.log('🔥 [loadAllUnreadCounts] Previous channelUnreadCounts state before update:', channelUnreadCounts)
+        
+        setChannelTotalUnreadCount(channelUnread)
+        setChannelUnreadCounts(channelUnreadByChannel)
+        setDmTotalUnreadCount(totalDmUnread)
+        setDmUnreadCounts(data.dmUnreadCounts || {})
+      } else {
+        console.error('🔥 [loadAllUnreadCounts] API failed with status:', response.status)
+      }
+    } catch (error) {
+      console.error('🔥 [loadAllUnreadCounts] Exception:', error)
+    }
+  }
+
   // Check authentication
   useEffect(() => {
     if (!isAuthenticated) {
@@ -239,8 +280,31 @@ export default function ChatPage() {
       // Fetch chat rooms when authenticated
       fetchChatRooms()
       loadAvailableUsers()
+
+      // Fire chat opened event to update last opened timestamp and notify header
+      fireChatOpenedEvent()
+
+      // 初回ロード後、5秒後に初回ロードフラグを解除
+      setTimeout(() => {
+        setIsInitialLoad(false)
+      }, 5000)
     }
   }, [isAuthenticated, router])
+
+  // Poll for all unread counts periodically
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    // Initial load
+    loadAllUnreadCounts()
+
+    // Poll every 30 seconds
+    const interval = setInterval(() => {
+      loadAllUnreadCounts()
+    }, 30000)
+
+    return () => clearInterval(interval)
+  }, [isAuthenticated])
 
   // Connect to socket on mount with error handling and reconnection logic
   useEffect(() => {
@@ -307,33 +371,6 @@ export default function ChatPage() {
     }
   }, [isConnected, currentRoom, joinChannel])
 
-  // Monitor new messages for unread count
-  useEffect(() => {
-    if (!messagesByChannel || !user) return
-
-    Object.entries(messagesByChannel).forEach(([channelId, channelMessages]) => {
-      if (!channelMessages || channelMessages.length === 0) return
-
-      // Get the last read timestamp for this channel
-      const lastRead = lastReadTimestamps[channelId] || 0
-      
-      // Count unread messages (messages newer than lastRead and not from current user)
-      const unreadCount = channelMessages.filter(msg => {
-        const messageTime = new Date(msg.createdAt).getTime()
-        return messageTime > lastRead && 
-               msg.userId !== user.id && 
-               channelId !== selectedChannel // Don't count messages in currently selected channel
-      }).length
-
-      // Update unread count if it changed
-      if (unreadCount > 0) {
-        setChannelUnreadCounts(prev => ({
-          ...prev,
-          [channelId]: unreadCount
-        }))
-      }
-    })
-  }, [messagesByChannel, lastReadTimestamps, user, selectedChannel])
 
   // Sanitize message content to prevent XSS
   const sanitizeMessage = useCallback((content: string): string => {
@@ -599,10 +636,60 @@ export default function ChatPage() {
       [channelKey]: 0
     }))
     
+    // Mark messages in this channel as read on server
+    // ただし、初回ロード時は少し遅延させる
+    const markAsRead = async () => {
+      try {
+        console.log('🔥 [handleChannelChange] Marking channel as read:', { channelKey, roomType, actualRoomId })
+
+        const markReadResponse = await fetch('/api/chat/mark-channel-read', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          },
+          body: JSON.stringify({
+            channelId: roomType === 'course' ? channelKey : null,
+            lessonId: roomType === 'lesson' ? actualRoomId : null,
+            privateRoomId: roomType === 'private' ? actualRoomId : null
+          })
+        })
+
+        if (markReadResponse.ok) {
+          const result = await markReadResponse.json()
+          console.log('🔥 [handleChannelChange] Channel marked as read:', result)
+          // Update channel total unread count
+          setChannelTotalUnreadCount(prev => Math.max(0, prev - (result.markedCount || 0)))
+          // Clear this specific channel's unread count only if there were actually unread messages
+          if (result.markedCount > 0) {
+            setChannelUnreadCounts(prev => ({
+              ...prev,
+              [channelKey]: 0
+            }))
+            console.log('🔥 [handleChannelChange] Cleared unread count for channel:', channelKey)
+          }
+        } else {
+          console.error('🔥 [handleChannelChange] Failed to mark channel as read:', markReadResponse.status)
+        }
+      } catch (error) {
+        console.error('🔥 [handleChannelChange] Error marking channel as read:', error)
+      }
+    }
+
     if (isConnected) {
       if (targetChannel) {
         console.log('Joining channel with actual ID:', actualRoomId, 'roomType:', roomType, 'from channel:', targetChannel)
         joinChannel(actualRoomId, roomType as 'lesson' | 'course' | 'dm' | 'private')
+
+        // メッセージ取得後に既読マーク
+        if (isInitialLoad) {
+          // 初回ロード時は5秒遅延してマーク
+          console.log('🔥 [handleChannelChange] Initial load - delaying mark as read')
+          setTimeout(markAsRead, 5000)
+        } else {
+          // 通常のチャンネル切り替えは2秒遅延してマーク（メッセージ表示後）
+          setTimeout(markAsRead, 2000)
+        }
       } else {
         joinChannel(channelId)
       }
@@ -953,6 +1040,62 @@ export default function ChatPage() {
       setError({ message: 'DMの開始に失敗しました', type: 'error' })
     }
   }
+
+  // Handle DM button click with mark as read functionality
+  const handleDMButtonClick = async () => {
+    console.log('🔥 [handleDMButtonClick] DM button clicked, total unread:', dmTotalUnreadCount)
+    
+    // Mark all DM rooms as read if there are unread messages
+    if (dmTotalUnreadCount > 0 && dmUnreadCounts) {
+      console.log('🔥 [handleDMButtonClick] Marking all DM rooms as read:', dmUnreadCounts)
+      
+      try {
+        const dmRoomIds = Object.keys(dmUnreadCounts).filter(roomId => dmUnreadCounts[roomId] > 0)
+        console.log('🔥 [handleDMButtonClick] DM room IDs to mark as read:', dmRoomIds)
+        
+        // Mark each DM room as read
+        for (const dmRoomId of dmRoomIds) {
+          console.log('🔥 [handleDMButtonClick] Marking DM room as read:', dmRoomId)
+          
+          const response = await fetch('/api/chat/mark-channel-read', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+            },
+            body: JSON.stringify({
+              dmRoomId: dmRoomId
+            })
+          })
+          
+          console.log('🔥 [handleDMButtonClick] API response status for', dmRoomId, ':', response.status)
+          
+          if (response.ok) {
+            const responseData = await response.json()
+            console.log('🔥 [handleDMButtonClick] API response data for', dmRoomId, ':', responseData)
+          } else {
+            const errorData = await response.text()
+            console.error('🔥 [handleDMButtonClick] API failed for', dmRoomId, ':', errorData)
+          }
+        }
+        
+        // Update local state immediately
+        setDmTotalUnreadCount(0)
+        setDmUnreadCounts({})
+        
+        // Trigger update events
+        window.dispatchEvent(new CustomEvent('dm-unread-update'))
+        window.dispatchEvent(new CustomEvent('chat-unread-update'))
+        
+        console.log('🔥 [handleDMButtonClick] Fired update events')
+      } catch (error) {
+        console.error('🔥 [handleDMButtonClick] Exception:', error)
+      }
+    }
+    
+    // Navigate to DM page
+    router.push('/dm')
+  }
   
   // Keyboard event handlers for accessibility
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -1003,34 +1146,8 @@ export default function ChatPage() {
     }
   }, [showPasswordModal])
   
-  // Mark messages as read when channel changes
-  useEffect(() => {
-    if (!selectedChannel || !user) return
-
-    const markChannelAsRead = async () => {
-      try {
-        await fetch('/api/chat/mark-channel-read', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-          },
-          body: JSON.stringify({
-            channelId: selectedChannel
-          })
-        })
-        
-        // Trigger unread count update
-        window.dispatchEvent(new CustomEvent('chat-unread-update'))
-      } catch (error) {
-        console.error('Failed to mark messages as read:', error)
-      }
-    }
-
-    // Small delay to ensure messages are loaded before marking as read
-    const timer = setTimeout(markChannelAsRead, 500)
-    return () => clearTimeout(timer)
-  }, [selectedChannel, user])
+  // Note: Removed redundant useEffect that was causing duplicate mark-channel-read calls
+  // The handleChannelChange function already handles marking channels as read when switching
 
   // Error dismissal timer
   useEffect(() => {
@@ -1090,7 +1207,14 @@ export default function ChatPage() {
         <div className="flex-1 overflow-y-auto">
           <div className="px-3 py-4">
             <div className="flex items-center justify-between px-2 mb-3">
-              <span className="text-xs uppercase font-semibold text-gray-400 tracking-wide">テキストチャンネル</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs uppercase font-semibold text-gray-400 tracking-wide">テキストチャンネル</span>
+                {channelTotalUnreadCount > 0 && (
+                  <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-medium">
+                    {channelTotalUnreadCount}
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-1">
                 <button 
                   onClick={fetchChatRooms}
@@ -1127,8 +1251,9 @@ export default function ChatPage() {
                     <div className="text-xs text-gray-400 mt-0.5">{channel.description}</div>
                   </div>
                   {channelUnreadCounts[channel.id] > 0 && (
-                    <div className="bg-red-500 text-white text-xs rounded-full px-2 py-1 min-w-[20px] h-5 flex items-center justify-center font-semibold">
-                      {channelUnreadCounts[channel.id]}
+                    <div className="ml-2 bg-red-500 text-white text-xs rounded-full px-2 py-1 font-semibold">
+                      new
+                      {console.log(`🔥 [DEBUG] Channel ${channel.id} showing NEW badge. Count:`, channelUnreadCounts[channel.id], 'Full state:', channelUnreadCounts)}
                     </div>
                   )}
                 </button>
@@ -1138,13 +1263,18 @@ export default function ChatPage() {
 
           {/* Direct Messages Link */}
           <div className="px-3 py-4 border-t border-gray-700">
-            <Link
-              href="/dm"
-              className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            <button
+              onClick={handleDMButtonClick}
+              className="relative w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
             >
               <MessageCircle className="w-4 h-4" />
               <span className="text-sm font-medium">ダイレクトメッセージ</span>
-            </Link>
+              {dmTotalUnreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 px-1.5 py-0.5 text-xs font-bold bg-red-500 text-white rounded-full">
+                  NEW
+                </span>
+              )}
+            </button>
           </div>
         </div>
 

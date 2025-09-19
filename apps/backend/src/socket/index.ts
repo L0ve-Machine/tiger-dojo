@@ -174,7 +174,7 @@ export class SocketServer {
     console.log(`Join room data: roomType=${roomType}, roomId=${roomId}`)
     
     // Extract channel from roomId if it contains channel info
-    let channelId = 'general'
+    let channelId = roomId  // Use roomId as channelId for course channels
     let baseRoomId = roomId
     
     if (roomId.includes('_')) {
@@ -182,6 +182,8 @@ export class SocketServer {
       baseRoomId = parts[0]
       channelId = parts[parts.length - 1]
     }
+
+    console.log(`📊 [socket-handleJoinRoom] Resolved channelId: ${channelId}, baseRoomId: ${baseRoomId} from roomId: ${roomId}`)
 
     try {
       // Check access permissions - pass the full roomId for course rooms
@@ -230,7 +232,7 @@ export class SocketServer {
         const messages = await this.getRecentDmMessages(roomId, 50)
         socket.emit('message_history', { channelId: roomId, messages })
       } else {
-        const messages = await this.getRecentMessages(roomType, baseRoomId, 50, channelId)
+        const messages = await this.getRecentMessages(roomType, baseRoomId, 50, channelId, socket.data.userId)
         socket.emit('message_history', { channelId, messages })
       }
 
@@ -283,6 +285,26 @@ export class SocketServer {
         return
       }
 
+      // For DM messages, generate consistent dmRoomId from user IDs
+      let dmRoomId = null
+      if (roomType === 'dm') {
+        // roomId for DM should contain two user IDs, extract the other user ID
+        const userIds = roomId.split('_').filter(id => id && id.length > 0)
+        if (userIds.length >= 2) {
+          // Find the other user ID (not the current user)
+          const otherUserId = userIds.find(id => id !== socket.data.userId)
+          if (otherUserId) {
+            // Create consistent DM room ID using sorted user IDs
+            dmRoomId = [socket.data.userId, otherUserId].sort().join('_')
+          }
+        }
+        
+        if (!dmRoomId) {
+          socket.emit('error', { message: 'Invalid DM room format' })
+          return
+        }
+      }
+
       // Save message to database with channel/DM/private room info
       let privateRoomId = null
       if (roomType === 'private') {
@@ -301,7 +323,7 @@ export class SocketServer {
         content,
         type,
         channelId: roomType === 'dm' ? undefined : channelId,
-        dmRoomId: roomType === 'dm' ? roomId : null
+        dmRoomId: dmRoomId
       })
 
       // Get user avatar info
@@ -325,7 +347,8 @@ export class SocketServer {
         type: message.type,
         createdAt: message.createdAt,
         isEdited: message.isEdited,
-        channelId
+        channelId,
+        dmRoomId: roomType === 'dm' ? dmRoomId : undefined
       }
 
       // Send to all users in the room (including sender)
@@ -374,7 +397,7 @@ export class SocketServer {
     const { roomType, roomId } = data
 
     try {
-      const messages = await this.getRecentMessages(roomType, roomId, 100)
+      const messages = await this.getRecentMessages(roomType, roomId, 100, 'general', socket.data.userId)
       socket.emit('message_history', messages)
     } catch (error) {
       console.error('Get history error:', error)
@@ -571,8 +594,11 @@ export class SocketServer {
     roomType: string,
     roomId: string,
     limit: number,
-    channelId: string = 'general'
+    channelId: string = 'general',
+    userId?: string
   ) {
+    console.log(`📊 [socket-getRecentMessages] Starting for roomType: ${roomType}, roomId: ${roomId}, channelId: ${channelId}, userId: ${userId}`)
+
     if (roomType === 'lesson') {
       const messages = await prisma.chatMessage.findMany({
         where: { 
@@ -588,11 +614,29 @@ export class SocketServer {
               avatarColor: true,
               avatarImage: true
             }
-          }
+          },
+          readBy: userId ? {
+            where: {
+              userId: userId
+            },
+            select: {
+              readAt: true
+            }
+          } : false
         },
         orderBy: { createdAt: 'desc' },
         take: limit
       })
+
+      console.log(`📊 [socket-getRecentMessages] Found ${messages.length} lesson messages`)
+      
+      if (userId) {
+        messages.forEach(msg => {
+          const isRead = msg.readBy && msg.readBy.length > 0
+          const isOwnMessage = msg.userId === userId
+          console.log(`📊 [socket-getRecentMessages] Message ${msg.id}: content="${msg.content.substring(0, 20)}", isOwnMessage=${isOwnMessage}, isRead=${isRead}`)
+        })
+      }
 
       return messages.reverse().map(msg => ({
         id: msg.id,
@@ -604,7 +648,8 @@ export class SocketServer {
         content: msg.content,
         type: msg.type,
         createdAt: msg.createdAt,
-        isEdited: msg.isEdited
+        isEdited: msg.isEdited,
+        isRead: userId && msg.readBy ? msg.readBy.length > 0 : false
       }))
     }
 
@@ -623,11 +668,29 @@ export class SocketServer {
               avatarColor: true,
               avatarImage: true
             }
-          }
+          },
+          readBy: userId ? {
+            where: {
+              userId: userId
+            },
+            select: {
+              readAt: true
+            }
+          } : false
         },
         orderBy: { createdAt: 'desc' },
         take: limit
       })
+
+      console.log(`📊 [socket-getRecentMessages] Found ${messages.length} course messages`)
+      
+      if (userId) {
+        messages.forEach(msg => {
+          const isRead = msg.readBy && msg.readBy.length > 0
+          const isOwnMessage = msg.userId === userId
+          console.log(`📊 [socket-getRecentMessages] Message ${msg.id}: content="${msg.content.substring(0, 20)}", isOwnMessage=${isOwnMessage}, isRead=${isRead}`)
+        })
+      }
 
       return messages.reverse().map(msg => ({
         id: msg.id,
@@ -639,7 +702,8 @@ export class SocketServer {
         content: msg.content,
         type: msg.type,
         createdAt: msg.createdAt,
-        isEdited: msg.isEdited
+        isEdited: msg.isEdited,
+        isRead: userId && msg.readBy ? msg.readBy.length > 0 : false
       }))
     }
 
