@@ -57,7 +57,7 @@ export default function DMPage() {
       if (response.ok) {
         const data = await response.json()
         const serverUnreadCounts = data.dmUnreadCounts || {}
-        
+
         console.log('📊 [fetchDmUnreadCounts] Server unread counts:', serverUnreadCounts)
         console.log('📊 [fetchDmUnreadCounts] Recently read DMs:', Array.from(recentlyReadDMs))
         

@@ -211,10 +211,13 @@ router.get('/unread-count', authenticateToken, async (req, res) => {
     const dmUnreadResult = await prisma.$queryRaw`
       SELECT cm.dmRoomId, COUNT(*) as count
       FROM ChatMessage cm
-      LEFT JOIN MessageRead mr ON cm.id = mr.messageId AND mr.userId = ${userId}
       WHERE cm.userId != ${userId}
         AND cm.dmRoomId IS NOT NULL
-        AND mr.messageId IS NULL
+        AND cm.id NOT IN (
+          SELECT mr.messageId
+          FROM MessageRead mr
+          WHERE mr.userId = ${userId}
+        )
       GROUP BY cm.dmRoomId
     `
     

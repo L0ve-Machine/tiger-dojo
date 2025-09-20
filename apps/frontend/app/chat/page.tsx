@@ -1043,59 +1043,8 @@ export default function ChatPage() {
     }
   }
 
-  // Handle DM button click with mark as read functionality
-  const handleDMButtonClick = async () => {
-    console.log('🔥 [handleDMButtonClick] DM button clicked, total unread:', dmTotalUnreadCount)
-    
-    // Mark all DM rooms as read if there are unread messages
-    if (dmTotalUnreadCount > 0 && dmUnreadCounts) {
-      console.log('🔥 [handleDMButtonClick] Marking all DM rooms as read:', dmUnreadCounts)
-      
-      try {
-        const dmRoomIds = Object.keys(dmUnreadCounts).filter(roomId => dmUnreadCounts[roomId] > 0)
-        console.log('🔥 [handleDMButtonClick] DM room IDs to mark as read:', dmRoomIds)
-        
-        // Mark each DM room as read
-        for (const dmRoomId of dmRoomIds) {
-          console.log('🔥 [handleDMButtonClick] Marking DM room as read:', dmRoomId)
-          
-          const response = await fetch('/api/chat/mark-channel-read', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-            },
-            body: JSON.stringify({
-              dmRoomId: dmRoomId
-            })
-          })
-          
-          console.log('🔥 [handleDMButtonClick] API response status for', dmRoomId, ':', response.status)
-          
-          if (response.ok) {
-            const responseData = await response.json()
-            console.log('🔥 [handleDMButtonClick] API response data for', dmRoomId, ':', responseData)
-          } else {
-            const errorData = await response.text()
-            console.error('🔥 [handleDMButtonClick] API failed for', dmRoomId, ':', errorData)
-          }
-        }
-        
-        // Update local state immediately
-        setDmTotalUnreadCount(0)
-        setDmUnreadCounts({})
-        
-        // Trigger update events
-        window.dispatchEvent(new CustomEvent('dm-unread-update'))
-        window.dispatchEvent(new CustomEvent('chat-unread-update'))
-        
-        console.log('🔥 [handleDMButtonClick] Fired update events')
-      } catch (error) {
-        console.error('🔥 [handleDMButtonClick] Exception:', error)
-      }
-    }
-    
-    // Navigate to DM page
+  // Handle DM button click - navigate to DM page without marking as read
+  const handleDMButtonClick = () => {
     router.push('/dm')
   }
   
