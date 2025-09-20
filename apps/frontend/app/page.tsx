@@ -5,6 +5,7 @@ import { ArrowRight, Play, Users, Shield, TrendingUp, Star, Award, Globe, Extern
 import Image from 'next/image'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { PRICING } from '@/lib/paypal-config'
 
 export default function Home() {
   return (
@@ -321,7 +322,7 @@ export default function Home() {
                 <h3 className="text-2xl mb-2 text-white">スタンダードプラン</h3>
                 
                 <div className="mb-4">
-                  <span className="text-4xl text-white">¥15,000</span>
+                  <span className="text-4xl text-white">{PRICING.STANDARD.price}</span>
                   <span className="text-lg text-gray-300">/月</span>
                 </div>
                 
@@ -366,7 +367,7 @@ export default function Home() {
 
                 <div className="space-y-3">
                   <Button 
-                    onClick={() => window.open('https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-8PD885481X888505ENAAKQAQ', '_blank')}
+                    onClick={() => window.open(PRICING.STANDARD.paypalUrl, '_blank')}
                     className="w-full py-3 transition-all duration-300 text-black border-2 hover:bg-yellow-500 rounded-lg font-bold"
                     style={{
                       background: 'linear-gradient(135deg, #d4af37, #e6c547)'
@@ -412,7 +413,7 @@ export default function Home() {
                 <h3 className="text-2xl mb-2 text-gray-900">プレミアムプラン</h3>
                 
                 <div className="mb-4">
-                  <span className="text-4xl text-gray-900">¥40,000</span>
+                  <span className="text-4xl text-gray-900">{PRICING.PREMIUM.price}</span>
                   <span className="text-lg text-gray-700">/月</span>
                 </div>
                 
@@ -487,7 +488,7 @@ export default function Home() {
 
                 <div className="space-y-3">
                   <Button 
-                    onClick={() => window.open('https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-6NX871965X4205206NAAKOJI', '_blank')}
+                    onClick={() => window.open(PRICING.PREMIUM.paypalUrl, '_blank')}
                     className="w-full py-3 transition-all duration-300 bg-gray-900 text-yellow-500 hover:bg-gray-800 rounded-lg font-bold text-center border-2 border-gray-900"
                     style={{
                       background: '#1f2937'

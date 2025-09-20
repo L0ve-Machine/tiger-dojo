@@ -216,7 +216,7 @@ export default function DashboardPage() {
               <Link href="/videos" className="text-gray-400 hover:text-white font-medium transition">
                 講習
               </Link>
-              <ChatLinkWithBadge href="/chat" className="text-gray-400 hover:text-white font-medium transition">
+              <ChatLinkWithBadge href="/chat" className="text-gray-400 hover:text-white font-medium transition" useTimestampBased={true}>
                 チャット
               </ChatLinkWithBadge>
               
@@ -270,6 +270,7 @@ export default function DashboardPage() {
                   href="/chat" 
                   className="block text-gray-400 hover:text-white font-medium transition"
                   onClick={() => setMobileMenuOpen(false)}
+                  useTimestampBased={true}
                 >
                   チャット
                 </ChatLinkWithBadge>

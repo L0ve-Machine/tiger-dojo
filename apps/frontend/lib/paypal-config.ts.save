@@ -7,7 +7,7 @@ export const PAYPAL_PLANS = {
 // 料金設定
 export const PRICING = {
   STANDARD: {
-    price: '¥15,000',
+    price: '¥20,000',
     paypalUrl: PAYPAL_PLANS.STANDARD
   },
   PREMIUM: {

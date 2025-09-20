@@ -6,6 +6,7 @@ import { useAuthStore } from '@/lib/auth-store'
 import { Check, Crown, Star, Zap, Loader2, Play, MessageCircle, ExternalLink, ArrowLeft } from 'lucide-react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { PRICING } from '@/lib/paypal-config'
 
 interface PlanFeature {
   text: string;
@@ -66,7 +67,7 @@ export default function PricingPlans() {
           {
             id: 'standard',
             name: "スタンダードプラン",
-            price: "¥15,000",
+            price: PRICING.STANDARD.price,
             description: "サロン参加でトレードの基礎を学ぶ",
             icon: <Star className="w-6 h-6" />,
             popular: true,
@@ -82,7 +83,7 @@ export default function PricingPlans() {
           {
             id: 'premium',
             name: "プレミアムプラン",
-            price: "¥40,000",
+            price: PRICING.PREMIUM.price,
             description: "プロの指導により一人で勝てるスキルを身に付ける",
             icon: <Crown className="w-6 h-6" />,
             premium: true,
@@ -119,9 +120,9 @@ export default function PricingPlans() {
     try {
       let paypalUrl = ''
       if (planId === 'standard') {
-        paypalUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-8PD885481X888505ENAAKQAQ'
+        paypalUrl = PRICING.STANDARD.paypalUrl
       } else if (planId === 'premium') {
-        paypalUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-6NX871965X4205206NAAKOJI'
+        paypalUrl = PRICING.PREMIUM.paypalUrl
       }
       
       if (paypalUrl) {

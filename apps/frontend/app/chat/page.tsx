@@ -249,9 +249,11 @@ export default function ChatPage() {
       
       if (response.ok) {
         const data = await response.json()
-        const totalDmUnread = Object.values(data.dmUnreadCounts || {}).reduce((sum: number, count: number) => sum + count, 0)
+        const dmValues = Object.values(data.dmUnreadCounts || {}) as number[]
+        const totalDmUnread = dmValues.reduce((sum: number, count: number) => sum + count, 0)
         const channelUnreadByChannel = data.channelUnreadCounts || {}
-        const channelUnread = Object.values(channelUnreadByChannel).reduce((sum: number, count: number) => sum + count, 0)
+        const channelValues = Object.values(channelUnreadByChannel) as number[]
+        const channelUnread = channelValues.reduce((sum: number, count: number) => sum + count, 0)
         
         console.log('🔥 [loadAllUnreadCounts] Server response:', data)
         console.log('🔥 [loadAllUnreadCounts] Total channel unread count:', channelUnread)
@@ -1209,11 +1211,6 @@ export default function ChatPage() {
             <div className="flex items-center justify-between px-2 mb-3">
               <div className="flex items-center gap-2">
                 <span className="text-xs uppercase font-semibold text-gray-400 tracking-wide">テキストチャンネル</span>
-                {channelTotalUnreadCount > 0 && (
-                  <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-medium">
-                    {channelTotalUnreadCount}
-                  </span>
-                )}
               </div>
               <div className="flex items-center gap-1">
                 <button 
@@ -1253,7 +1250,6 @@ export default function ChatPage() {
                   {channelUnreadCounts[channel.id] > 0 && (
                     <div className="ml-2 bg-red-500 text-white text-xs rounded-full px-2 py-1 font-semibold">
                       new
-                      {console.log(`🔥 [DEBUG] Channel ${channel.id} showing NEW badge. Count:`, channelUnreadCounts[channel.id], 'Full state:', channelUnreadCounts)}
                     </div>
                   )}
                 </button>

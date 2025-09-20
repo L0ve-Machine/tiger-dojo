@@ -54,7 +54,17 @@
       "Bash(nginx:*)",
       "Bash(export NODE_ENV=production)",
       "Bash(echo:*)",
-      "Bash(export NODE_ENV=development)"
+      "Bash(export NODE_ENV=development)",
+      "Bash(git pull:*)",
+      "Read(//root/**)",
+      "Read(//var/log/**)",
+      "Bash(tsx:*)",
+      "Bash(xargs kill:*)",
+      "Bash(PORT=5001 npm run dev)",
+      "Bash(timeout 10s pm2 logs:*)",
+      "WebFetch(domain:trade-dojo-fx.com)",
+      "Bash(pm2 stop:*)",
+      "Bash(pm2 start npm:*)"
     ],
     "deny": [],
     "ask": []

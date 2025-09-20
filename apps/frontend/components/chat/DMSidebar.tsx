@@ -81,6 +81,23 @@ export default function DMSidebar({ currentUserId, onSelectDM, selectedDmRoomId,
       if (response.ok) {
         const data = await response.json()
         setConversations(data)
+        
+        // If the selected DM room isn't in conversations, add it
+        if (selectedDmRoomId && !data.some((conv: DMConversation) => conv.dmRoomId === selectedDmRoomId)) {
+          // Find the other user for this DM room
+          const otherUserId = selectedDmRoomId.split('_').find(id => id !== currentUserId)
+          const otherUser = users.find(u => u.id === otherUserId)
+          
+          if (otherUser) {
+            // Add the conversation to the list
+            setConversations(prev => [{
+              dmRoomId: selectedDmRoomId,
+              otherUser: otherUser,
+              unreadCount: 0,
+              lastMessage: undefined
+            }, ...prev])
+          }
+        }
       }
     } catch (err) {
       console.error('Failed to load recent conversations:', err)
@@ -94,6 +111,10 @@ export default function DMSidebar({ currentUserId, onSelectDM, selectedDmRoomId,
   }
 
   const handleConversationClick = (conversation: DMConversation) => {
+    // 即座に既読処理を呼び出す
+    if (onMarkAsRead) {
+      onMarkAsRead(conversation.dmRoomId)
+    }
     onSelectDM(conversation.dmRoomId, conversation.otherUser)
   }
 

@@ -8,6 +8,7 @@ import Link from 'next/link'
 import DMSidebar from '@/components/chat/DMSidebar'
 import DMChat from '@/components/chat/DMChat'
 import { io, Socket } from 'socket.io-client'
+import { fireChatOpenedEvent } from '@/lib/chat-notifications'
 
 interface DMUser {
   id: string
@@ -27,11 +28,16 @@ export default function DMPage() {
   const [dmLastReadTimestamps, setDmLastReadTimestamps] = useState<Record<string, number>>({})
   const [recentlyReadDMs, setRecentlyReadDMs] = useState<Set<string>>(new Set())
   const [socket, setSocket] = useState<Socket | null>(null)
+  const [dmOpenedTimestamp, setDmOpenedTimestamp] = useState<number>(Date.now())
 
   // Check authentication
   useEffect(() => {
     if (!isAuthenticated) {
       router.push('/auth/login')
+    } else {
+      // Fire chat opened event when DM page is opened
+      fireChatOpenedEvent()
+      setDmOpenedTimestamp(Date.now())
     }
   }, [isAuthenticated, router])
 
@@ -40,6 +46,8 @@ export default function DMPage() {
     if (!user) return
     
     try {
+      console.log('📊 [fetchDmUnreadCounts] Fetching unread counts from server...')
+      
       const response = await fetch('/api/chat/unread-count', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
@@ -50,18 +58,25 @@ export default function DMPage() {
         const data = await response.json()
         const serverUnreadCounts = data.dmUnreadCounts || {}
         
+        console.log('📊 [fetchDmUnreadCounts] Server unread counts:', serverUnreadCounts)
+        console.log('📊 [fetchDmUnreadCounts] Recently read DMs:', Array.from(recentlyReadDMs))
+        
         // Don't overwrite counts for recently read DMs
         const filteredCounts = { ...serverUnreadCounts }
         recentlyReadDMs.forEach(dmRoomId => {
           if (filteredCounts[dmRoomId] !== undefined) {
+            console.log('📊 [fetchDmUnreadCounts] Filtering out recently read DM:', dmRoomId)
             filteredCounts[dmRoomId] = 0
           }
         })
         
+        console.log('📊 [fetchDmUnreadCounts] Final filtered counts:', filteredCounts)
         setDmUnreadCounts(filteredCounts)
+      } else {
+        console.error('📊 [fetchDmUnreadCounts] API failed with status:', response.status)
       }
     } catch (error) {
-      console.error('Failed to fetch DM unread counts:', error)
+      console.error('📊 [fetchDmUnreadCounts] Exception:', error)
     }
   }
 
@@ -81,33 +96,24 @@ export default function DMPage() {
     }
   }, [user, isAuthenticated])
 
-  const handleSelectDM = async (dmRoomId: string, otherUser: DMUser) => {
-    setSelectedDmRoomId(dmRoomId)
-    setSelectedOtherUser(otherUser)
-    setShowMobileSidebar(false) // Hide sidebar on mobile when chat is selected
+  const handleMarkAsRead = async (dmRoomId: string) => {
+    console.log('🔥 [handleMarkAsRead] Starting for dmRoomId:', dmRoomId)
     
-    // Update last read timestamp for this DM
-    setDmLastReadTimestamps(prev => ({
-      ...prev,
-      [dmRoomId]: Date.now()
-    }))
-    
-    // Clear unread count for this DM immediately
-    console.log('Clearing unread count for dmRoomId:', dmRoomId)
+    // Clear unread count for this DM immediately (for instant UI feedback)
+    console.log('🔥 [handleMarkAsRead] Immediately clearing unread count for dmRoomId:', dmRoomId)
     setDmUnreadCounts(prev => {
-      const newCounts = {
-        ...prev,
-        [dmRoomId]: 0
-      }
-      console.log('New DM unread counts:', newCounts)
+      const newCounts = { ...prev, [dmRoomId]: 0 }
+      console.log('🔥 [handleMarkAsRead] Updated DM unread counts:', newCounts)
       return newCounts
     })
 
-    // Add to recently read DMs list to prevent server overwrite
-    setRecentlyReadDMs(prev => new Set([...prev, dmRoomId]))
+    // Fire chat opened event
+    fireChatOpenedEvent()
 
-    // Mark DM messages as read
+    // Mark DM messages as read in backend
     try {
+      console.log('🔥 [handleMarkAsRead] Sending API request to mark-channel-read with dmRoomId:', dmRoomId)
+      
       const response = await fetch('/api/chat/mark-channel-read', {
         method: 'POST',
         headers: {
@@ -119,35 +125,46 @@ export default function DMPage() {
         })
       })
       
+      console.log('🔥 [handleMarkAsRead] API response status:', response.status)
+      
       if (response.ok) {
+        const responseData = await response.json()
+        console.log('🔥 [handleMarkAsRead] API response data:', responseData)
+        
         // Trigger unread count update immediately
         window.dispatchEvent(new CustomEvent('dm-unread-update'))
-        
-        // Wait a bit, then remove from recently read list and refresh counts
-        setTimeout(() => {
-          setRecentlyReadDMs(prev => {
-            const newSet = new Set(prev)
-            newSet.delete(dmRoomId)
-            return newSet
-          })
-          fetchDmUnreadCounts()
-        }, 3000) // Wait 3 seconds for server to process
+        window.dispatchEvent(new CustomEvent('chat-unread-update'))
+        console.log('🔥 [handleMarkAsRead] Fired update events')
+      } else {
+        const errorData = await response.text()
+        console.error('🔥 [handleMarkAsRead] API failed with status:', response.status, 'error:', errorData)
       }
     } catch (error) {
-      console.error('Failed to mark DM messages as read:', error)
-      // Remove from recently read list on error
-      setRecentlyReadDMs(prev => {
-        const newSet = new Set(prev)
-        newSet.delete(dmRoomId)
-        return newSet
-      })
+      console.error('🔥 [handleMarkAsRead] Exception:', error)
     }
+  }
+
+  const handleSelectDM = async (dmRoomId: string, otherUser: DMUser) => {
+    setSelectedDmRoomId(dmRoomId)
+    setSelectedOtherUser(otherUser)
+    setShowMobileSidebar(false) // Hide sidebar on mobile when chat is selected
+    
+    // Update last read timestamp for this DM
+    setDmLastReadTimestamps(prev => ({
+      ...prev,
+      [dmRoomId]: Date.now()
+    }))
+    
+    // Mark as read (this will be called again, but it's idempotent)
+    await handleMarkAsRead(dmRoomId)
   }
 
   const handleBackToSidebar = () => {
     setShowMobileSidebar(true)
     setSelectedDmRoomId('')
     setSelectedOtherUser(null)
+    // Fire chat opened event when going back to ensure notification state is updated
+    fireChatOpenedEvent()
   }
 
   if (!isAuthenticated || !user) {
@@ -208,6 +225,7 @@ export default function DMPage() {
             onSelectDM={handleSelectDM}
             selectedDmRoomId={selectedDmRoomId}
             dmUnreadCounts={dmUnreadCounts}
+            onMarkAsRead={handleMarkAsRead}
             key={JSON.stringify(dmUnreadCounts)} // Force re-render when counts change
           />
         </div>

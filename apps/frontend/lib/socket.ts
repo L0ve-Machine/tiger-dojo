@@ -276,13 +276,21 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
   sendMessage: async (content: string, type: ChatMessage['type'] = 'TEXT') => {
     const { socket, currentRoom, isConnected, currentChannel } = get()
-    
+
     // Use currentChannel if available, fallback to currentRoom
     const channelId = currentChannel || (currentRoom ? currentRoom.roomId : 'general')
     const roomType = currentRoom ? currentRoom.roomType : 'course'
     const roomId = currentRoom ? currentRoom.roomId : 'general'
 
-    console.log('Sending message:', { channelId, roomType, roomId, isConnected })
+    console.log('🔥 [sendMessage] Debug:', {
+      currentChannel,
+      currentRoom,
+      channelId,
+      roomType,
+      roomId,
+      isConnected,
+      content: content.substring(0, 20) + '...'
+    })
 
     // Try Socket.io first if connected
     if (isConnected && socket?.connected) {
@@ -385,8 +393,9 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     const finalRoomType = roomType || 'course'
     
     console.log('Joining channel with roomType:', finalRoomType, 'roomId:', channelId)
+    console.log('🔥 [joinChannel] Setting currentChannel to:', channelId)
     socket?.emit('join_room', { roomType: finalRoomType, roomId: channelId })
-    
+
     set({ currentChannel: channelId })
   },
 

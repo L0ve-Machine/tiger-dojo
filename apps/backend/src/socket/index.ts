@@ -20,6 +20,7 @@ interface SendMessageData {
   roomId: string
   content: string
   type?: 'TEXT' | 'QUESTION' | 'ANSWER' | 'ANNOUNCEMENT'
+  channelId?: string  // Added to receive channelId from client
 }
 
 interface TypingData {
@@ -265,14 +266,15 @@ export class SocketServer {
   }
 
   private async handleSendMessage(socket: Socket, data: SendMessageData) {
-    const { roomType, roomId, content, type = 'TEXT' } = data
+    const { roomType, roomId, content, type = 'TEXT', channelId: providedChannelId } = data
     const roomName = this.getRoomName(roomType, roomId)
-    
-    // Extract channel from roomId
-    let channelId = 'general'
+
+    // Use provided channelId if available, otherwise extract from roomId or default to roomId
+    let channelId = providedChannelId || roomId
     let baseRoomId = roomId
-    
-    if (roomId.includes('_')) {
+
+    // Only try to extract from roomId if no channelId was provided
+    if (!providedChannelId && roomId.includes('_')) {
       const parts = roomId.split('_')
       baseRoomId = parts[0]
       channelId = parts[parts.length - 1]
@@ -314,6 +316,19 @@ export class SocketServer {
         })
         privateRoomId = privateRoom?.id || null
       }
+
+      console.log('🔥 [socket-sendMessage] Saving message with:', {
+        userId: socket.data.userId,
+        lessonId: roomType === 'lesson' ? baseRoomId : null,
+        courseId: roomType === 'course' ? baseRoomId : null,
+        privateRoomId,
+        channelId: roomType === 'dm' ? undefined : channelId,
+        dmRoomId: dmRoomId,
+        content: content.substring(0, 20) + '...',
+        roomType,
+        originalRoomId: roomId,
+        baseRoomId
+      })
 
       const message = await this.saveMessage({
         userId: socket.data.userId,
@@ -543,7 +558,14 @@ export class SocketServer {
     channelId?: string
     dmRoomId?: string | null
   }) {
-    return prisma.chatMessage.create({
+    const finalChannelId = data.channelId || 'general'
+
+    console.log('🔥 [saveMessage] Creating message with channelId:', finalChannelId, 'full data:', {
+      ...data,
+      content: data.content.substring(0, 20) + '...'
+    })
+
+    const message = await prisma.chatMessage.create({
       data: {
         userId: data.userId,
         lessonId: data.lessonId,
@@ -551,10 +573,13 @@ export class SocketServer {
         privateRoomId: data.privateRoomId,
         content: data.content,
         type: data.type as any,
-        channelId: data.channelId || 'general',
+        channelId: finalChannelId,
         dmRoomId: data.dmRoomId
       }
     })
+
+    console.log('🔥 [saveMessage] Message created with ID:', message.id, 'channelId:', message.channelId)
+    return message
   }
 
   private async getRecentDmMessages(
