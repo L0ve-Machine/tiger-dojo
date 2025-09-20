@@ -1,0 +1,17 @@
+// PayPal決済リンク設定
+export const PAYPAL_PLANS = {
+  STANDARD: 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-8PD885481X888505ENAAKQAQ',
+  PREMIUM: 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-6NX871965X4205206NAAKOJI'
+} as const
+
+// 料金設定
+export const PRICING = {
+  STANDARD: {
+    price: '¥20,000',
+    paypalUrl: PAYPAL_PLANS.STANDARD
+  },
+  PREMIUM: {
+    price: '¥60,000',
+    paypalUrl: PAYPAL_PLANS.PREMIUM
+  }
+} as const
